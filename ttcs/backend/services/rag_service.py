@@ -11,14 +11,11 @@ except ImportError:
 from pipeline.embedder import TextEmbedder
 from pipeline.vector_store import ChromaVectorStore
 
-PROMPT_TEMPLATE = """Bạn là trợ lý hỏi đáp thông minh. Dựa trên các đoạn văn bản sau đây, hãy trả lời câu hỏi một cách chính xác và súc tích.
-
-NGỮ CẢNH:
-{context}
-
-CÂU HỎI: {question}
-
-TRẢ LỜI (nếu không tìm thấy thông tin liên quan, hãy nói rõ):"""
+try:
+    from prompt import build_rag_prompt
+except ImportError:
+    # Fallback for running from the repository root (same pattern used elsewhere in this package)
+    from ttcs.prompt import build_rag_prompt
 
 
 def now_iso() -> str:
@@ -44,8 +41,8 @@ class RAGService:
             filter_document_ids=document_ids,
         )
 
-        context = "\n\n---\n\n".join([r["chunk_text"] for r in results]) if results else "(không có ngữ cảnh)"
-        prompt = PROMPT_TEMPLATE.format(context=context, question=question)
+        context = "\n\n---\n\n".join([r["chunk_text"] for r in results]) if results else ""
+        prompt = build_rag_prompt(context=context, question=question)
         answer_text = await self.llm_service.generate(prompt)
         sources = [SourceChunk(**r) for r in results]
         return ChatResponse(
