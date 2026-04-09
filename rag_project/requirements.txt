@@ -1,0 +1,30 @@
+# ============================================================
+# RAG Project - Requirements
+# Hệ thống hỏi đáp thông minh sử dụng kiến trúc RAG
+# ============================================================
+
+# Backend Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.0
+python-multipart==0.0.18
+
+# Database
+sqlalchemy==2.0.36
+
+# AI & Vector Search
+chromadb==0.5.20
+sentence-transformers==3.3.1
+
+# Document Processing
+pymupdf==1.25.1
+python-docx==1.1.2
+
+# HTTP Client (reuse từ codex_oauth_module)
+httpx==0.28.0
+
+# Frontend
+streamlit==1.41.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.3
