@@ -20,7 +20,10 @@ class DocumentResponse(BaseModel):
     file_type: Optional[str]
     status: str
     chunk_count: int
+    page_count: int = 0
     error_message: Optional[str] = None
+    summary: Optional[str] = None
+    content_preview: Optional[str] = None
     uploaded_at: datetime
 
     class Config:
@@ -31,6 +34,25 @@ class DocumentListResponse(BaseModel):
     """Schema trả về danh sách tài liệu."""
     total: int
     documents: List[DocumentResponse]
+
+
+class DocumentContentResponse(BaseModel):
+    """Schema trả về nội dung đầy đủ của tài liệu."""
+    id: int
+    file_name: str
+    file_type: Optional[str]
+    content: str
+    page_count: int = 0
+    word_count: int = 0
+    char_count: int = 0
+
+
+class DocumentSummaryResponse(BaseModel):
+    """Schema trả về tóm tắt tài liệu."""
+    id: int
+    file_name: str
+    summary: str
+    model_used: str
 
 
 # ============================================================

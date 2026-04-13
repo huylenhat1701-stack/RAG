@@ -1,12 +1,14 @@
 """
 API Routes - Các endpoints RESTful
-POST /documents/upload  - Upload tài liệu
-GET  /documents         - Danh sách tài liệu
-DELETE /documents/{id}  - Xóa tài liệu
-POST /chat/ask          - Hỏi đáp RAG
-GET  /chat/history      - Lịch sử hỏi đáp
-DELETE /chat/history    - Xóa lịch sử
-GET  /health            - Kiểm tra trạng thái
+POST /documents/upload       - Upload tài liệu
+GET  /documents              - Danh sách tài liệu
+GET  /documents/{id}/content - Xem nội dung tài liệu
+POST /documents/{id}/summarize - Tóm tắt tài liệu bằng AI
+DELETE /documents/{id}       - Xóa tài liệu
+POST /chat/ask               - Hỏi đáp RAG
+GET  /chat/history           - Lịch sử hỏi đáp
+DELETE /chat/history         - Xóa lịch sử
+GET  /health                 - Kiểm tra trạng thái
 """
 
 import threading
@@ -20,10 +22,15 @@ from ..db.database import get_db
 from ..repositories.document_repo import DocumentRepository
 from ..repositories.history_repo import HistoryRepository
 from ..services.llm_service import LLMService, get_llm_service
-from ..services.document_service import save_upload_file, process_and_index_document
-from ..services.rag_service import answer_question
+from ..services.document_service import (
+    save_upload_file,
+    process_and_index_document,
+    get_document_content,
+)
+from ..services.rag_service import answer_question, summarize_document
 from ..models.schemas import (
     DocumentResponse, DocumentListResponse,
+    DocumentContentResponse, DocumentSummaryResponse,
     AskRequest, AskResponse,
     ChatHistoryResponse, ChatHistoryListResponse,
     MessageResponse,
@@ -115,6 +122,56 @@ def list_documents(db: Session = Depends(get_db)):
     doc_repo = DocumentRepository(db)
     docs = doc_repo.get_all()
     return DocumentListResponse(total=len(docs), documents=docs)
+
+
+@router.get(
+    "/documents/{doc_id}/content",
+    response_model=DocumentContentResponse,
+    summary="Xem nội dung tài liệu",
+    description="Đọc và trả về nội dung đầy đủ của tài liệu theo ID.",
+    tags=["Tài liệu"],
+)
+def read_document_content(doc_id: int, db: Session = Depends(get_db)):
+    """Đọc nội dung đầy đủ của tài liệu."""
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
+    content_data = get_document_content(doc_id, doc_repo)
+    if not content_data:
+        raise HTTPException(status_code=404, detail="Không thể đọc nội dung tài liệu")
+
+    return DocumentContentResponse(
+        id=doc.id,
+        file_name=doc.file_name,
+        file_type=doc.file_type,
+        content=content_data["content"],
+        page_count=content_data["page_count"],
+        word_count=content_data["word_count"],
+        char_count=content_data["char_count"],
+    )
+
+
+@router.post(
+    "/documents/{doc_id}/summarize",
+    response_model=DocumentSummaryResponse,
+    summary="Tóm tắt tài liệu bằng AI",
+    description="Sử dụng AI để tóm tắt nội dung tài liệu. Kết quả được cache lại.",
+    tags=["Tài liệu"],
+)
+def summarize_doc(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """Tóm tắt tài liệu bằng AI (CodexOAuth)."""
+    try:
+        return summarize_document(doc_id, db, llm_service)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tóm tắt: {str(e)}")
 
 
 @router.delete(

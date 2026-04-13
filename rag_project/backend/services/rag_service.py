@@ -1,5 +1,5 @@
 """
-RAG Service - Điều phối luồng Hỏi & Đáp
+RAG Service - Điều phối luồng Hỏi & Đáp và Tóm tắt tài liệu
 Kết hợp search (Retrieval) và generate (Generation).
 """
 
@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from ..repositories.document_repo import DocumentRepository
 from ..repositories.history_repo import HistoryRepository
 from ..services.llm_service import LLMService, SearchResult
-from ..models.schemas import AskResponse, SourceInfo
-from ..core.config import CODEX_MODEL
+from ..services.document_service import get_document_content
+from ..models.schemas import AskResponse, SourceInfo, DocumentSummaryResponse
+from ..core.config import CODEX_MODEL, SUMMARY_SYSTEM_PROMPT
 
 
 def answer_question(
@@ -90,4 +91,68 @@ def answer_question(
         sources=sources_for_response,
         model_used=CODEX_MODEL,
         history_id=history.id,
+    )
+
+
+def summarize_document(
+    doc_id: int,
+    db: Session,
+    llm_service: LLMService,
+) -> DocumentSummaryResponse:
+    """
+    Tóm tắt tài liệu bằng AI.
+    
+    Luồng:
+        1. Lấy nội dung tài liệu
+        2. Gọi CodexOAuth để tóm tắt
+        3. Lưu tóm tắt vào DB
+        4. Trả về kết quả
+    """
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id)
+    
+    if not doc:
+        raise ValueError(f"Không tìm thấy tài liệu ID={doc_id}")
+
+    # Nếu đã có summary, trả luôn
+    if doc.summary:
+        return DocumentSummaryResponse(
+            id=doc.id,
+            file_name=doc.file_name,
+            summary=doc.summary,
+            model_used=CODEX_MODEL,
+        )
+
+    # Lấy nội dung tài liệu
+    content_data = get_document_content(doc_id, doc_repo)
+    if not content_data or not content_data["content"]:
+        raise ValueError("Không thể đọc nội dung tài liệu")
+
+    # Giới hạn nội dung gửi cho AI (tối đa ~6000 chars để không quá dài)
+    content = content_data["content"]
+    if len(content) > 6000:
+        content = content[:6000] + "\n\n[... nội dung còn lại đã được cắt bớt ...]"
+
+    # Gọi CodexOAuth để tóm tắt
+    prompt = (
+        f"TÀI LIỆU CẦN TÓM TẮT: {doc.file_name}\n\n"
+        f"NỘI DUNG:\n{content}"
+    )
+
+    codex = llm_service._get_codex()
+    summary = codex.chat(
+        message=prompt,
+        model=CODEX_MODEL,
+        system_prompt=SUMMARY_SYSTEM_PROMPT,
+        reasoning_effort="medium",
+    )
+
+    # Lưu vào DB
+    doc_repo.update_summary(doc_id, summary)
+
+    return DocumentSummaryResponse(
+        id=doc.id,
+        file_name=doc.file_name,
+        summary=summary,
+        model_used=CODEX_MODEL,
     )

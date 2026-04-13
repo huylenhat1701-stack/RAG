@@ -21,7 +21,16 @@ if str(MODULE_ROOT) not in sys.path:
 
 # ============================================================
 # Cấu hình Codex OAuth (LLM)
+# Giống codex_oauth_module/constants.py — OAuth app id công khai của Codex CLI
 # ============================================================
+CODEX_CLIENT_ID: str = os.getenv(
+    "CODEX_CLIENT_ID",
+    "app_EMoamEEZ73f0CkXaXp7hrann",
+)
+CODEX_TOKEN_URL: str = os.getenv(
+    "CODEX_TOKEN_URL",
+    "https://auth.openai.com/oauth/token",
+)
 CODEX_AUTH_FILE: str = os.getenv("CODEX_AUTH_FILE", "~/.codex/auth.json")
 CODEX_MODEL: str = os.getenv("CODEX_MODEL", "gpt-5.2-codex")
 CODEX_REASONING_EFFORT: str = os.getenv("CODEX_REASONING_EFFORT", "medium")
@@ -56,3 +65,16 @@ Nhiệm vụ của bạn:
 3. Trích dẫn rõ nguồn tài liệu khi trả lời.
 4. Trả lời rõ ràng, súc tích và chính xác bằng tiếng Việt.
 5. KHÔNG bịa đặt thông tin ngoài tài liệu."""
+
+# ============================================================
+# System Prompt cho Tóm Tắt Tài Liệu
+# ============================================================
+SUMMARY_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên tóm tắt tài liệu.
+
+Nhiệm vụ:
+1. Đọc kỹ nội dung tài liệu được cung cấp.
+2. Tóm tắt ngắn gọn, rõ ràng bằng tiếng Việt.
+3. Nêu các ý chính, thông tin quan trọng.
+4. Giữ bố cục: Chủ đề chính → Các điểm nổi bật → Kết luận.
+5. Tóm tắt không quá 500 từ.
+6. Sử dụng bullet points để dễ đọc."""

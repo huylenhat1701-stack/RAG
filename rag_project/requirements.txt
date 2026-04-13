@@ -1,6 +1,6 @@
 # ============================================================
 # RAG Project - Requirements
-# Hệ thống hỏi đáp thông minh sử dụng kiến trúc RAG
+# He thong hoi dap thong minh su dung kien truc RAG
 # ============================================================
 
 # Backend Framework

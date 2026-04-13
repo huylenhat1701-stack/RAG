@@ -30,6 +30,9 @@ class Document(Base):
     status = Column(String(20), default="UPLOADED")                   # Trạng thái
     chunk_count = Column(Integer, default=0)                          # Số chunk đã tạo
     error_message = Column(Text, nullable=True)                       # Lỗi nếu có
+    summary = Column(Text, nullable=True)                             # Tóm tắt tài liệu bởi AI
+    content_preview = Column(Text, nullable=True)                     # 500 ký tự đầu tiên
+    page_count = Column(Integer, default=0)                           # Số trang (PDF)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
 

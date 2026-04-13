@@ -12,15 +12,22 @@ from typing import Optional, List
 _CODEX_MODULE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # → codex_oauth_module/
 _CODEX_PARENT_DIR = _CODEX_MODULE_DIR.parent  # → thư mục chứa codex_oauth_module/
 
+_FALLBACK_DIR = Path(r"C:\Users\HACOM\Documents\openai\codex_oauth_module")
+_FALLBACK_PARENT = _FALLBACK_DIR.parent
+
+if not (_CODEX_MODULE_DIR / "client.py").exists() and (_FALLBACK_DIR / "client.py").exists():
+    _CODEX_MODULE_DIR = _FALLBACK_DIR
+    _CODEX_PARENT_DIR = _FALLBACK_PARENT
+
 for _p in [str(_CODEX_MODULE_DIR), str(_CODEX_PARENT_DIR)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 # Import từ codex_oauth_module như một package
 try:
-    import codex_oauth_module as _codex_pkg  # noqa - kích hoạt package
-    from codex_oauth_module.client import CodexOAuth
-    from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult
+    import codex_oauth_module as _codex_pkg  # noqa # type: ignore
+    from codex_oauth_module.client import CodexOAuth  # type: ignore
+    from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
     _CODEX_AVAILABLE = True
     print("✅ codex_oauth_module import thành công.")
 except ImportError:
@@ -44,8 +51,8 @@ except ImportError:
         _load("codex_oauth_module.client", str(_CODEX_MODULE_DIR / "client.py"))
         _load("codex_oauth_module.vector_store", str(_CODEX_MODULE_DIR / "vector_store.py"))
         _load("codex_oauth_module.local_rag", str(_CODEX_MODULE_DIR / "local_rag.py"))
-        from codex_oauth_module.client import CodexOAuth
-        from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult
+        from codex_oauth_module.client import CodexOAuth  # type: ignore
+        from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
         _CODEX_AVAILABLE = True
         print("✅ codex_oauth_module import thành công (fallback loader).")
     except Exception as e:
@@ -57,9 +64,22 @@ except ImportError:
         SearchResult = None
 
 from ..core.config import (
-    CODEX_AUTH_FILE, CODEX_MODEL, CODEX_REASONING_EFFORT,
-    CHROMA_PERSIST_DIR, CHUNK_SIZE, CHUNK_OVERLAP, RAG_SYSTEM_PROMPT
+    CODEX_AUTH_FILE,
+    CODEX_CLIENT_ID,
+    CODEX_TOKEN_URL,
+    CODEX_MODEL,
+    CODEX_REASONING_EFFORT,
+    CHROMA_PERSIST_DIR,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
+    RAG_SYSTEM_PROMPT,
 )
+
+if _CODEX_AVAILABLE:
+    import codex_oauth_module.constants as _codex_constants  # type: ignore
+
+    _codex_constants.CLIENT_ID = CODEX_CLIENT_ID
+    _codex_constants.TOKEN_URL = CODEX_TOKEN_URL
 
 
 class LLMService:

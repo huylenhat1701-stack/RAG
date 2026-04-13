@@ -3,7 +3,7 @@ Document Repository - Thao tác CRUD với bảng documents
 """
 
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # type: ignore
 
 from ..models.domain import Document
 
@@ -50,6 +50,25 @@ class DocumentRepository:
                 doc.chunk_count = chunk_count
             if error:
                 doc.error_message = error
+            self.db.commit()
+            self.db.refresh(doc)
+        return doc
+
+    def update_summary(self, doc_id: int, summary: str) -> Optional[Document]:
+        """Cập nhật tóm tắt tài liệu."""
+        doc = self.get_by_id(doc_id)
+        if doc:
+            doc.summary = summary
+            self.db.commit()
+            self.db.refresh(doc)
+        return doc
+
+    def update_content_preview(self, doc_id: int, preview: str, page_count: int = 0) -> Optional[Document]:
+        """Cập nhật preview nội dung và số trang."""
+        doc = self.get_by_id(doc_id)
+        if doc:
+            doc.content_preview = preview
+            doc.page_count = page_count
             self.db.commit()
             self.db.refresh(doc)
         return doc

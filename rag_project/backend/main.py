@@ -18,7 +18,7 @@ from .services.document_service import reload_indexed_documents
 async def lifespan(app: FastAPI):
     """Lifecycle events: khởi tạo DB và reload documents khi start."""
     # === STARTUP ===
-    print("🚀 Đang khởi động RAG Backend...")
+    print("🚀 Đang khởi động Smart Document Reader Backend...")
 
     # 1. Khởi tạo SQLite tables
     init_db()
@@ -32,25 +32,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ Không reload được tài liệu: {e}")
 
-    print("✅ RAG Backend sẵn sàng!")
+    print("✅ Smart Document Reader Backend sẵn sàng!")
     yield
 
     # === SHUTDOWN ===
-    print("👋 RAG Backend đang tắt...")
+    print("👋 Smart Document Reader Backend đang tắt...")
 
 
 # ============================================================
 # FastAPI App
 # ============================================================
 app = FastAPI(
-    title="🤖 RAG Q&A API",
+    title="📖 Smart Document Reader API",
     description=(
-        "Hệ thống Hỏi Đáp Thông Minh sử dụng kiến trúc RAG "
+        "**Hệ thống Đọc Tài Liệu Thông Minh** sử dụng kiến trúc RAG "
         "(Retrieval-Augmented Generation)\n\n"
+        "### Tính năng chính:\n"
+        "- 📁 **Upload & Quản lý** tài liệu (PDF, DOCX, TXT, MD)\n"
+        "- 📖 **Đọc nội dung** tài liệu trực tuyến\n"
+        "- 🤖 **Tóm tắt tự động** bằng AI\n"
+        "- 💬 **Hỏi đáp thông minh** dựa trên tài liệu\n"
+        "- 📚 **Lịch sử** các phiên hỏi đáp\n\n"
         "**Sinh viên:** Lê Nhật Huy - B23DCAT126 | Phạm Hải Đông - B23DCVT090\n\n"
         "**Công nghệ:** FastAPI + ChromaDB + CodexOAuth (GPT-5)"
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",    # Swagger UI
     redoc_url="/redoc",  # ReDoc
@@ -73,8 +79,15 @@ app.include_router(router, prefix="/api/v1")
 def root():
     """Thông tin ứng dụng."""
     return {
-        "app": "RAG Q&A System",
-        "version": "1.0.0",
+        "app": "📖 Smart Document Reader",
+        "version": "2.0.0",
+        "description": "Hệ thống Đọc Tài Liệu Thông Minh",
+        "features": [
+            "Upload & quản lý tài liệu",
+            "Đọc nội dung trực tuyến",
+            "Tóm tắt tài liệu bằng AI",
+            "Hỏi đáp thông minh (RAG)",
+        ],
         "docs": "/docs",
         "health": "/api/v1/health",
     }
