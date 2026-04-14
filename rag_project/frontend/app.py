@@ -11,7 +11,7 @@ import streamlit as st
 from pathlib import Path
 from datetime import datetime
 
-# ============================================================
+# ==============1==============================================
 # Cấu hình trang
 # ============================================================
 st.set_page_config(
@@ -553,10 +553,11 @@ st.markdown("""
 # ============================================================
 # Tabs chính
 # ============================================================
-tab_docs, tab_read, tab_summary, tab_chat, tab_history = st.tabs([
+tab_docs, tab_read, tab_summary, tab_exercise, tab_chat, tab_history = st.tabs([
     "📁 Quản Lý Tài Liệu",
     "📖 Đọc Tài Liệu",
     "🤖 Tóm Tắt AI",
+    "📝 Tạo Bài Tập",
     "💬 Hỏi & Đáp",
     "📚 Lịch Sử",
 ])
@@ -695,6 +696,15 @@ with tab_docs:
                     else:
                         st.success("Đã xóa!")
                         st.rerun()
+
+                file_url = f"{BACKEND_URL}/documents/{doc['id']}/download?source=original"
+                extracted_url = f"{BACKEND_URL}/documents/{doc['id']}/download?source=extracted"
+                st.markdown(f"""
+                    <div style='margin-top:0.75rem; display:flex; gap:0.4rem; flex-wrap:wrap;'>
+                        <a class='doc-link' href='{file_url}' target='_blank'>📄 Mở file gốc</a>
+                        <a class='doc-link' href='{extracted_url}' target='_blank'>📝 Mở file Text AI</a>
+                    </div>
+                """, unsafe_allow_html=True)
 
         # Refresh button
         if st.button("🔄 Làm mới danh sách", use_container_width=False):
@@ -851,7 +861,82 @@ with tab_summary:
 
 
 # ============================================================
-# TAB 4: Hỏi & Đáp
+# TAB 4: Tạo Bài Tập
+with tab_exercise:
+    st.markdown("#### 📝 Tạo Bài Tập Từ Giáo Trình")
+    st.caption("Sử dụng AI để tạo câu hỏi trắc nghiệm, tự luận hoặc thảo luận dựa trên tài liệu đã upload.")
+
+    docs_data, err = api_get("/documents")
+    if err:
+        st.error(err)
+    elif not docs_data or docs_data["total"] == 0:
+        st.markdown(
+            """
+            <div class="empty-state">
+                <div class="icon">📝</div>
+                <h3>Chưa có tài liệu để tạo bài tập</h3>
+                <p>Upload tài liệu trước ở tab "Quản Lý Tài Liệu".</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        docs = docs_data["documents"]
+        indexed_docs = [d for d in docs if d["status"] == "INDEXED"]
+
+        if not indexed_docs:
+            st.warning("Chưa có tài liệu nào được index xong. Vui lòng chờ xử lý hoàn tất.")
+        else:
+            doc_options = {
+                f"{get_file_icon(d.get('file_type', ''))} {d['file_name']}": d['id']
+                for d in indexed_docs
+            }
+            selected_doc = st.selectbox(
+                "Chọn tài liệu để tạo bài tập",
+                options=list(doc_options.keys()),
+                index=0,
+                key="exercise_doc_select"
+            )
+            exercise_type = st.radio(
+                "Chọn dạng bài tập",
+                options=["trắc nghiệm", "tự luận", "thảo luận"],
+                horizontal=True,
+            )
+            num_questions = st.slider(
+                "Số lượng câu hỏi",
+                min_value=1,
+                max_value=20,
+                value=5,
+                help="Số lượng câu hỏi AI sẽ tạo",
+            )
+
+            if st.button("📝 Tạo bài tập", type="primary", use_container_width=False):
+                doc_id = doc_options[selected_doc]
+                with st.spinner("AI đang tạo bài tập... (có thể mất 15-30 giây)"):
+                    result, err = api_post(
+                        f"/documents/{doc_id}/exercise",
+                        json_data={"exercise_type": exercise_type, "count": num_questions},
+                    )
+                if err:
+                    st.error(err)
+                elif result:
+                    st.markdown(f"""
+                        <div class="summary-box">
+                            <h4>📝 Bài tập AI tạo</h4>
+                            {result['exercise_text'].replace(chr(10), '<br>')}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.caption(f"Model: `{result.get('model_used', 'N/A')}`")
+                    st.download_button(
+                        "⬇️ Tải bài tập về",
+                        data=result['exercise_text'],
+                        file_name=f"{result['file_name']}_baitap.txt",
+                        mime="text/plain",
+                    )
+
+
+# ============================================================
+# TAB 5: Hỏi & Đáp
 # ============================================================
 with tab_chat:
     st.markdown("#### 💬 Hỏi & Đáp Thông Minh")

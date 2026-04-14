@@ -31,7 +31,9 @@ CODEX_TOKEN_URL: str = os.getenv(
     "CODEX_TOKEN_URL",
     "https://auth.openai.com/oauth/token",
 )
-CODEX_AUTH_FILE: str = os.getenv("CODEX_AUTH_FILE", "~/.codex/auth.json")
+CODEX_AUTH_FILE: str = str(
+    Path(os.path.expanduser(os.getenv("CODEX_AUTH_FILE", "~/.codex/auth.json"))).expanduser()
+)
 CODEX_MODEL: str = os.getenv("CODEX_MODEL", "gpt-5.2-codex")
 CODEX_REASONING_EFFORT: str = os.getenv("CODEX_REASONING_EFFORT", "medium")
 

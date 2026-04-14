@@ -15,7 +15,8 @@ import threading
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..db.database import get_db
@@ -27,11 +28,12 @@ from ..services.document_service import (
     process_and_index_document,
     get_document_content,
 )
-from ..services.rag_service import answer_question, summarize_document
+from ..services.rag_service import answer_question, summarize_document, generate_exercise
 from ..models.schemas import (
     DocumentResponse, DocumentListResponse,
     DocumentContentResponse, DocumentSummaryResponse,
     AskRequest, AskResponse,
+    ExerciseRequest, ExerciseResponse,
     ChatHistoryResponse, ChatHistoryListResponse,
     MessageResponse,
 )
@@ -198,6 +200,64 @@ def delete_document(doc_id: int, db: Session = Depends(get_db)):
 
     doc_repo.delete(doc_id)
     return MessageResponse(message=f"Đã xóa tài liệu: {doc.file_name}")
+
+
+@router.get(
+    "/documents/{doc_id}/download",
+    summary="Tải file tài liệu hoặc file text đã xuất",
+    tags=["Tài liệu"],
+)
+def download_document(
+    doc_id: int,
+    source: str = Query("extracted", regex="^(original|extracted)$"),
+    db: Session = Depends(get_db),
+):
+    """Cho phép tải file gốc hoặc file text đã xuất từ tài liệu."""
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
+    file_path = Path(doc.file_path)
+    if source == "original":
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File gốc không tồn tại")
+        return FileResponse(str(file_path), filename=file_path.name)
+
+    extracted_path = file_path.with_suffix(".extracted.txt")
+    if not extracted_path.exists():
+        content_data = get_document_content(doc_id, doc_repo)
+        if not content_data or not content_data.get("content"):
+            raise HTTPException(status_code=404, detail="Không thể tạo file text từ tài liệu")
+        extracted_path.write_text(content_data["content"], encoding="utf-8")
+
+    return FileResponse(str(extracted_path), filename=extracted_path.name, media_type="text/plain")
+
+
+@router.post(
+    "/documents/{doc_id}/exercise",
+    response_model=ExerciseResponse,
+    summary="Tạo bài tập từ tài liệu bằng AI",
+    tags=["Tài liệu"],
+)
+def create_exercise(
+    doc_id: int,
+    request: ExerciseRequest,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    try:
+        return generate_exercise(
+            doc_id=doc_id,
+            exercise_type=request.exercise_type,
+            count=request.count or 5,
+            db=db,
+            llm_service=llm_service,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo bài tập: {str(e)}")
 
 
 # ============================================================

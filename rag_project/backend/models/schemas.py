@@ -64,6 +64,28 @@ class AskRequest(BaseModel):
     top_k: Optional[int] = Field(default=5, ge=1, le=20, description="Số lượng chunk tài liệu tìm kiếm")
 
 
+class ExerciseRequest(BaseModel):
+    """Schema nhận yêu cầu tạo bài tập từ tài liệu."""
+    exercise_type: str = Field(
+        default="trắc nghiệm",
+        description="Loại bài tập: trắc nghiệm, tự luận, thảo luận"
+    )
+    count: Optional[int] = Field(
+        default=5,
+        ge=1,
+        le=30,
+        description="Số lượng câu hỏi muốn tạo"
+    )
+
+
+class ExerciseResponse(BaseModel):
+    """Schema trả về bài tập do AI tạo."""
+    id: int
+    file_name: str
+    exercise_text: str
+    model_used: str
+
+
 class SourceInfo(BaseModel):
     """Thông tin nguồn tài liệu tham chiếu."""
     file_name: str

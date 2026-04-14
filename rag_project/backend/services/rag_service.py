@@ -10,7 +10,7 @@ from ..repositories.document_repo import DocumentRepository
 from ..repositories.history_repo import HistoryRepository
 from ..services.llm_service import LLMService, SearchResult
 from ..services.document_service import get_document_content
-from ..models.schemas import AskResponse, SourceInfo, DocumentSummaryResponse
+from ..models.schemas import AskResponse, SourceInfo, DocumentSummaryResponse, ExerciseResponse
 from ..core.config import CODEX_MODEL, SUMMARY_SYSTEM_PROMPT
 
 
@@ -154,5 +154,51 @@ def summarize_document(
         id=doc.id,
         file_name=doc.file_name,
         summary=summary,
+        model_used=CODEX_MODEL,
+    )
+
+
+def generate_exercise(
+    doc_id: int,
+    exercise_type: str,
+    count: int,
+    db: Session,
+    llm_service: LLMService,
+) -> ExerciseResponse:
+    """Tạo bài tập từ nội dung tài liệu bằng CodexOAuth."""
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise ValueError(f"Không tìm thấy tài liệu ID={doc_id}")
+
+    content_data = get_document_content(doc_id, doc_repo)
+    if not content_data or not content_data["content"]:
+        raise ValueError("Không thể đọc nội dung tài liệu để tạo bài tập")
+
+    content = content_data["content"]
+    if len(content) > 6000:
+        content = content[:6000] + "\n\n[... nội dung còn lại đã được cắt bớt ...]"
+
+    prompt = (
+        f"TẠO {exercise_type.upper()} TỪ TÀI LIỆU: {doc.file_name}\n\n"
+        f"YÊU CẦU: Tạo {count} câu {exercise_type}. \n"
+        f"TRẢ VỀ KẾT QUẢ CÓ CÂU HỎI VÀ ĐÁP ÁN RÕ RÀNG.\n\n"
+        f"NỘI DUNG:\n{content}"
+    )
+
+    codex = llm_service._get_codex()
+    exercise_text = codex.chat(
+        message=prompt,
+        model=CODEX_MODEL,
+        system_prompt=(
+            f"Bạn là trợ lý giáo dục. Tạo {exercise_type} dựa trên nội dung tài liệu."
+        ),
+        reasoning_effort="medium",
+    )
+
+    return ExerciseResponse(
+        id=doc.id,
+        file_name=doc.file_name,
+        exercise_text=exercise_text,
         model_used=CODEX_MODEL,
     )
