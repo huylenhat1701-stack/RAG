@@ -55,13 +55,26 @@ def answer_question(
         )
 
     # Bước 1: Retrieval - tìm chunks liên quan
-    search_results: List[SearchResult] = llm_service.search(question, top_k=top_k)
+    try:
+        search_results: List[SearchResult] = llm_service.search(question, top_k=top_k)
+    except Exception as e:
+        print(f"⚠️ Lỗi search: {str(e)}")
+        raise RuntimeError(f"❌ Lỗi tìm kiếm: {str(e)}")
 
     # Bước 2: Generation - gọi Codex sinh câu trả lời
-    answer = llm_service.generate_answer(
-        question=question,
-        context_chunks=search_results,
-    )
+    try:
+        answer = llm_service.generate_answer(
+            question=question,
+            context_chunks=search_results,
+        )
+    except RuntimeError as e:
+        # Nếu là lỗi từ llm_service, pass through
+        raise
+    except Exception as e:
+        error_msg = str(e)
+        if "token" in error_msg.lower() or "auth" in error_msg.lower():
+            raise RuntimeError(f"❌ Lỗi xác thực: {error_msg}")
+        raise RuntimeError(f"❌ Lỗi sinh câu trả lời: {error_msg}")
 
     # Bước 3: Chuẩn bị danh sách sources
     sources_for_response = []

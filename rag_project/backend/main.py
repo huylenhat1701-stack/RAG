@@ -24,13 +24,15 @@ async def lifespan(app: FastAPI):
     init_db()
 
     # 2. Reload tài liệu đã index từ lần chạy trước
-    try:
-        llm_service = get_llm_service()
-        with SessionLocal() as db:
-            doc_repo = DocumentRepository(db)
-            reload_indexed_documents(doc_repo, llm_service)
-    except Exception as e:
-        print(f"⚠️ Không reload được tài liệu: {e}")
+    # TEMPORARILY DISABLED FOR DEBUGGING
+    # try:
+    #     llm_service = get_llm_service()
+    #     with SessionLocal() as db:
+    #         doc_repo = DocumentRepository(db)
+    #         reload_indexed_documents(doc_repo, llm_service)
+    # except Exception as e:
+    #     print(f"⚠️ Không reload được tài liệu: {e}")
+    print("⚠️ Reload documents tạm thời bị tắt để debug")
 
     print("✅ Smart Document Reader Backend sẵn sàng!")
     yield

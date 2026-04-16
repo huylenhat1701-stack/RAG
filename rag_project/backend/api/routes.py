@@ -285,8 +285,19 @@ def ask_question(
             llm_service=llm_service,
         )
         return response
+    except RuntimeError as e:
+        # Lỗi từ LLM service (token, auth, etc.)
+        error_msg = str(e)
+        if "token" in error_msg.lower() or "auth" in error_msg.lower():
+            raise HTTPException(
+                status_code=401,
+                detail=f"{error_msg}\n💡 Vui lòng chạy: python browser_login.py để đăng nhập lại."
+            )
+        raise HTTPException(status_code=500, detail=error_msg)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý câu hỏi: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"❌ Lỗi xử lý câu hỏi: {str(e)}")
 
 
 @router.get(

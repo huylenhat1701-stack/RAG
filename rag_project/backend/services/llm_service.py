@@ -102,14 +102,52 @@ class LLMService:
                     "CodexOAuth không khả dụng. Kiểm tra lại module."
                 )
             try:
+                from pathlib import Path
+                auth_path = Path(CODEX_AUTH_FILE)
+                print(f"🔍 Tìm file auth: {CODEX_AUTH_FILE}")
+                print(f"   Tồn tại: {auth_path.exists()}")
+                
+                if not auth_path.exists():
+                    raise FileNotFoundError(f"File không tồn tại: {CODEX_AUTH_FILE}")
+                
                 self._codex = CodexOAuth.from_file(CODEX_AUTH_FILE)
                 print(f"✅ CodexOAuth đã kết nối: {self._codex.email or 'unknown'}")
-            except FileNotFoundError:
+                
+                # Kiểm tra authentication status
+                if hasattr(self._codex, 'is_authenticated'):
+                    print(f"   Authentication status: {self._codex.is_authenticated}")
+                    
+            except FileNotFoundError as e:
                 raise RuntimeError(
-                    f"Không tìm thấy file auth: {CODEX_AUTH_FILE}\n"
-                    "Vui lòng chạy: python browser_login.py"
+                    f"❌ Không tìm thấy file auth: {CODEX_AUTH_FILE}\n"
+                    f"   Chi tiết: {str(e)}\n"
+                    "   Hãy chạy: python browser_login.py"
+                )
+            except Exception as e:
+                error_type = type(e).__name__
+                raise RuntimeError(
+                    f"❌ Không thể tải token ({error_type}): {str(e)}\n"
+                    "   Hãy chạy: python browser_login.py --refresh hoặc python browser_login.py"
                 )
         return self._codex
+
+    def _refresh_token_if_needed(self):
+        """Thử refresh token nếu hết hạn."""
+        if self._codex is None:
+            return
+        try:
+            # Kiểm tra xem token còn hiệu lực không
+            if hasattr(self._codex, 'is_authenticated') and not self._codex.is_authenticated:
+                print("🔄 Token hết hạn, thử làm mới...")
+                if hasattr(self._codex, 'refresh_token'):
+                    self._codex.refresh_token()
+                    print("✅ Token đã làm mới thành công")
+                else:
+                    print("⚠️ Không thể tự động làm mới token, vui lòng đăng nhập lại")
+                    self._codex = None
+        except Exception as e:
+            print(f"⚠️ Lỗi khi làm mới token: {e}")
+            self._codex = None
 
     def _get_rag(self) -> "LocalRAG":
         """Lazy-load RAG client."""
@@ -181,38 +219,51 @@ class LLMService:
     ) -> str:
         """
         Gọi Codex để sinh câu trả lời dựa trên context.
+        Có retry logic để xử lý token hết hạn.
         """
-        codex = self._get_codex()
-        model = model or CODEX_MODEL
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                codex = self._get_codex()
+                model = model or CODEX_MODEL
 
-        # Xây dựng context từ các chunk tìm thấy
-        if not context_chunks:
-            context = "⚠️ Không tìm thấy thông tin liên quan trong tài liệu."
-        else:
-            context_parts = []
-            for i, result in enumerate(context_chunks, 1):
-                context_parts.append(
-                    f"--- Nguồn {i}: {result.chunk.filename} (độ phù hợp: {result.score:.0%}) ---\n"
-                    f"{result.chunk.text}"
+                # Xây dựng context từ các chunk tìm thấy
+                if not context_chunks:
+                    context = "⚠️ Không tìm thấy thông tin liên quan trong tài liệu."
+                else:
+                    context_parts = []
+                    for i, result in enumerate(context_chunks, 1):
+                        context_parts.append(
+                            f"--- Nguồn {i}: {result.chunk.filename} (độ phù hợp: {result.score:.0%}) ---\n"
+                            f"{result.chunk.text}"
+                        )
+                    context = "\n\n".join(context_parts)
+
+                # Build prompt
+                full_prompt = (
+                    f"NGỮ CẢNH TỪ TÀI LIỆU:\n"
+                    f"{context}\n\n"
+                    f"---\n\n"
+                    f"CÂU HỎI: {question}"
                 )
-            context = "\n\n".join(context_parts)
 
-        # Build prompt
-        full_prompt = (
-            f"NGỮ CẢNH TỪ TÀI LIỆU:\n"
-            f"{context}\n\n"
-            f"---\n\n"
-            f"CÂU HỎI: {question}"
-        )
-
-        # Gọi CodexOAuth.chat()
-        answer = codex.chat(
-            message=full_prompt,
-            model=model,
-            system_prompt=RAG_SYSTEM_PROMPT,
-            reasoning_effort=CODEX_REASONING_EFFORT,
-        )
-        return answer
+                # Gọi CodexOAuth.chat()
+                answer = codex.chat(
+                    message=full_prompt,
+                    model=model,
+                    system_prompt=RAG_SYSTEM_PROMPT,
+                    reasoning_effort=CODEX_REASONING_EFFORT,
+                )
+                return answer
+            except Exception as e:
+                error_msg = str(e).lower()
+                # Nếu lỗi liên quan tới token, thử làm mới và retry
+                if "token" in error_msg and "expired" in error_msg and attempt < max_retries - 1:
+                    print(f"⚠️ Lần {attempt + 1}: Token hết hạn, thử làm mới...")
+                    self._refresh_token_if_needed()
+                    continue
+                # Nếu không phải token, hoặc đã retry hết lần, ném lỗi
+                raise RuntimeError(f"❌ Lỗi từ AI: {str(e)}")
 
     def is_healthy(self) -> dict:
         """Kiểm tra trạng thái kết nối."""

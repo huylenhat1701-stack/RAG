@@ -5,11 +5,16 @@ Sinh viên: Lê Nhật Huy - B23DCAT126 | Phạm Hải Đông - B23DCVT090
 """
 
 import json
+import os
 import time
 import requests
 import streamlit as st
 from pathlib import Path
 from datetime import datetime
+
+# Create a requests session that ignores proxy environment variables
+requests_session = requests.Session()
+requests_session.trust_env = False
 
 # ==============1==============================================
 # Cấu hình trang
@@ -22,7 +27,7 @@ st.set_page_config(
 )
 
 # URL của FastAPI Backend
-BACKEND_URL = "http://localhost:8000/api/v1"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api/v1")
 
 # ============================================================
 # Premium CSS - Dark Theme với Glassmorphism
@@ -383,7 +388,7 @@ st.markdown("""
 def api_get(endpoint: str, params: dict = None):
     """Gọi GET request tới backend."""
     try:
-        resp = requests.get(f"{BACKEND_URL}{endpoint}", params=params, timeout=60)
+        resp = requests_session.get(f"{BACKEND_URL}{endpoint}", params=params, timeout=60)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.text}"
@@ -397,9 +402,9 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
     """Gọi POST request tới backend."""
     try:
         if files:
-            resp = requests.post(f"{BACKEND_URL}{endpoint}", files=files, timeout=120)
+            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", files=files, timeout=120)
         else:
-            resp = requests.post(f"{BACKEND_URL}{endpoint}", json=json_data, timeout=120)
+            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", json=json_data, timeout=120)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.json().get('detail', resp.text)}"
@@ -412,7 +417,7 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
 def api_delete(endpoint: str):
     """Gọi DELETE request."""
     try:
-        resp = requests.delete(f"{BACKEND_URL}{endpoint}", timeout=30)
+        resp = requests_session.delete(f"{BACKEND_URL}{endpoint}", timeout=30)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.text}"
