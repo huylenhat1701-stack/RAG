@@ -18,34 +18,32 @@ from .services.document_service import reload_indexed_documents
 async def lifespan(app: FastAPI):
     """Lifecycle events: khởi tạo DB và reload documents khi start."""
     # === STARTUP ===
-    print("🚀 Đang khởi động Smart Document Reader Backend...")
+    print("[START] Dang khoi dong Smart Document Reader Backend...")
 
     # 1. Khởi tạo SQLite tables
     init_db()
 
     # 2. Reload tài liệu đã index từ lần chạy trước
-    # TEMPORARILY DISABLED FOR DEBUGGING
-    # try:
-    #     llm_service = get_llm_service()
-    #     with SessionLocal() as db:
-    #         doc_repo = DocumentRepository(db)
-    #         reload_indexed_documents(doc_repo, llm_service)
-    # except Exception as e:
-    #     print(f"⚠️ Không reload được tài liệu: {e}")
-    print("⚠️ Reload documents tạm thời bị tắt để debug")
+    try:
+        llm_service = get_llm_service()
+        with SessionLocal() as db:
+            doc_repo = DocumentRepository(db)
+            reload_indexed_documents(doc_repo, llm_service)
+    except Exception as e:
+        print(f"[WARN] Khong reload duoc tai lieu: {e}")
 
-    print("✅ Smart Document Reader Backend sẵn sàng!")
+    print("[OK] Smart Document Reader Backend san sang!")
     yield
 
     # === SHUTDOWN ===
-    print("👋 Smart Document Reader Backend đang tắt...")
+    print("[STOP] Smart Document Reader Backend dang tat...")
 
 
 # ============================================================
 # FastAPI App
 # ============================================================
 app = FastAPI(
-    title="📖 Smart Document Reader API",
+    title="Smart Document Reader API",
     description=(
         "**Hệ thống Đọc Tài Liệu Thông Minh** sử dụng kiến trúc RAG "
         "(Retrieval-Augmented Generation)\n\n"
@@ -81,14 +79,14 @@ app.include_router(router, prefix="/api/v1")
 def root():
     """Thông tin ứng dụng."""
     return {
-        "app": "📖 Smart Document Reader",
+        "app": "Smart Document Reader",
         "version": "2.0.0",
         "description": "Hệ thống Đọc Tài Liệu Thông Minh",
         "features": [
-            "Upload & quản lý tài liệu",
-            "Đọc nội dung trực tuyến",
-            "Tóm tắt tài liệu bằng AI",
-            "Hỏi đáp thông minh (RAG)",
+            "Upload & quan ly tai lieu",
+            "Doc noi dung truc tuyen",
+            "Tom tat tai lieu bang AI",
+            "Hoi dap thong minh (RAG)",
         ],
         "docs": "/docs",
         "health": "/api/v1/health",

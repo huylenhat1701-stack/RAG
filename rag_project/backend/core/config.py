@@ -36,6 +36,7 @@ CODEX_AUTH_FILE: str = str(
 )
 CODEX_MODEL: str = os.getenv("CODEX_MODEL", "gpt-5.2-codex")
 CODEX_REASONING_EFFORT: str = os.getenv("CODEX_REASONING_EFFORT", "medium")
+EMBEDDING_PROFILE: str = os.getenv("EMBEDDING_PROFILE", "fast")
 
 # ============================================================
 # Cấu hình lưu trữ file
@@ -52,8 +53,8 @@ CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================
 # Cấu hình RAG / Chunking
 # ============================================================
-CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
-CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
+CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1500"))
+CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
 TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "5"))
 
 # ============================================================

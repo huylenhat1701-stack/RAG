@@ -388,7 +388,7 @@ st.markdown("""
 def api_get(endpoint: str, params: dict = None):
     """Gọi GET request tới backend."""
     try:
-        resp = requests_session.get(f"{BACKEND_URL}{endpoint}", params=params, timeout=60)
+        resp = requests_session.get(f"{BACKEND_URL}{endpoint}", params=params, timeout=600)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.text}"
@@ -402,9 +402,9 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
     """Gọi POST request tới backend."""
     try:
         if files:
-            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", files=files, timeout=120)
+            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", files=files, timeout=300)
         else:
-            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", json=json_data, timeout=120)
+            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", json=json_data, timeout=300)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.json().get('detail', resp.text)}"
@@ -417,7 +417,7 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
 def api_delete(endpoint: str):
     """Gọi DELETE request."""
     try:
-        resp = requests_session.delete(f"{BACKEND_URL}{endpoint}", timeout=30)
+        resp = requests_session.delete(f"{BACKEND_URL}{endpoint}", timeout=120)
         if resp.status_code == 200:
             return resp.json(), None
         return None, f"Lỗi {resp.status_code}: {resp.text}"
@@ -959,6 +959,35 @@ with tab_chat:
             help="Số đoạn văn bản liên quan nhất đưa vào ngữ cảnh cho AI"
         )
 
+        st.markdown("---")
+        st.markdown("**📂 Giới hạn tìm kiếm theo tài liệu**")
+        st.caption("Để trống = tìm kiếm toàn bộ tài liệu đã upload")
+
+        # Lấy danh sách tài liệu đã INDEXED
+        chat_docs_data, _ = api_get("/documents")
+        chat_indexed_docs = []
+        if chat_docs_data and chat_docs_data.get("documents"):
+            chat_indexed_docs = [
+                d for d in chat_docs_data["documents"] if d["status"] == "INDEXED"
+            ]
+
+        if chat_indexed_docs:
+            doc_label_to_id = {
+                f"{get_file_icon(d.get('file_type', ''))} {d['file_name']}": d["id"]
+                for d in chat_indexed_docs
+            }
+            selected_doc_labels = st.multiselect(
+                "Chọn tài liệu cần tìm kiếm",
+                options=list(doc_label_to_id.keys()),
+                default=[],
+                key="chat_doc_filter",
+                help="Chọn một hoặc nhiều tài liệu. Để trống để tìm tất cả.",
+            )
+            selected_doc_ids = [doc_label_to_id[label] for label in selected_doc_labels]
+        else:
+            st.info("Chưa có tài liệu nào được index. Hãy upload ở tab **Quản Lý Tài Liệu**.")
+            selected_doc_ids = []
+
     # Chat display
     chat_container = st.container()
     with chat_container:
@@ -986,6 +1015,8 @@ with tab_chat:
                                 for s in msg["sources"]
                             ])
                             st.markdown(sources_html, unsafe_allow_html=True)
+                        if msg.get("filtered_docs"):
+                            st.caption(f"🔍 Giới hạn tìm kiếm: {', '.join(msg['filtered_docs'])}")
 
     # Input
     question = st.chat_input("Nhập câu hỏi của bạn về tài liệu...")
@@ -994,15 +1025,32 @@ with tab_chat:
         st.session_state.chat_messages.append({"role": "user", "content": question})
 
         with st.spinner("🔍 Đang tìm kiếm và tạo câu trả lời..."):
-            result, err = api_post("/chat/ask", json_data={"question": question, "top_k": top_k})
+            history_ToSend = [{"role": msg["role"], "content": msg["content"]} for msg in st.session_state.chat_messages[:-1]]
+            ask_payload = {
+                "question": question,
+                "top_k": top_k,
+                "history": history_ToSend,
+            }
+            if selected_doc_ids:
+                ask_payload["doc_ids"] = selected_doc_ids
+
+            result, err = api_post("/chat/ask", json_data=ask_payload)
 
         if err:
             st.error(err)
         else:
+            # Tên các file đã được lọc (để hiển thị trong message)
+            filtered_doc_names = [
+                d["file_name"]
+                for d in chat_indexed_docs
+                if d["id"] in selected_doc_ids
+            ] if selected_doc_ids else []
+
             st.session_state.chat_messages.append({
                 "role": "assistant",
                 "content": result["answer"],
                 "sources": result.get("sources", []),
+                "filtered_docs": filtered_doc_names,
             })
             st.rerun()
 

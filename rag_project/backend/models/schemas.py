@@ -58,10 +58,16 @@ class DocumentSummaryResponse(BaseModel):
 # ============================================================
 # Chat / Q&A Schemas
 # ============================================================
+class MessageInfo(BaseModel):
+    role: str
+    content: str
+
 class AskRequest(BaseModel):
     """Schema nhận câu hỏi từ người dùng."""
     question: str = Field(..., min_length=3, max_length=2000, description="Câu hỏi của người dùng")
     top_k: Optional[int] = Field(default=5, ge=1, le=20, description="Số lượng chunk tài liệu tìm kiếm")
+    history: Optional[List[MessageInfo]] = Field(default=[], description="Lịch sử trò chuyện")
+    doc_ids: Optional[List[int]] = Field(default=None, description="Giới hạn tìm kiếm trong danh sách ID tài liệu (None = tất cả)")
 
 
 class ExerciseRequest(BaseModel):

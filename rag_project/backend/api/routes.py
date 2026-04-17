@@ -283,6 +283,8 @@ def ask_question(
             top_k=request.top_k,
             db=db,
             llm_service=llm_service,
+            history=[msg.dict() for msg in request.history] if request.history else None,
+            doc_ids=request.doc_ids if request.doc_ids else None,
         )
         return response
     except RuntimeError as e:

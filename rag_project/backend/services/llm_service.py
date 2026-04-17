@@ -29,7 +29,7 @@ try:
     from codex_oauth_module.client import CodexOAuth  # type: ignore
     from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
     _CODEX_AVAILABLE = True
-    print("✅ codex_oauth_module import thành công.")
+    print("[OK] codex_oauth_module import thanh cong.")
 except ImportError:
     # Fallback: import trực tiếp từ module_root nếu không có __init__.py đúng
     try:
@@ -54,9 +54,9 @@ except ImportError:
         from codex_oauth_module.client import CodexOAuth  # type: ignore
         from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
         _CODEX_AVAILABLE = True
-        print("✅ codex_oauth_module import thành công (fallback loader).")
+        print("[OK] codex_oauth_module import thanh cong (fallback loader).")
     except Exception as e:
-        print(f"⚠️ Không thể import codex_oauth_module: {e}")
+        print(f"[WARN] Khong the import codex_oauth_module: {e}")
         _CODEX_AVAILABLE = False
         CodexOAuth = None
         LocalRAG = None
@@ -69,6 +69,7 @@ from ..core.config import (
     CODEX_TOKEN_URL,
     CODEX_MODEL,
     CODEX_REASONING_EFFORT,
+    EMBEDDING_PROFILE,
     CHROMA_PERSIST_DIR,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
@@ -104,30 +105,30 @@ class LLMService:
             try:
                 from pathlib import Path
                 auth_path = Path(CODEX_AUTH_FILE)
-                print(f"🔍 Tìm file auth: {CODEX_AUTH_FILE}")
-                print(f"   Tồn tại: {auth_path.exists()}")
+                print(f"[INFO] Tim file auth: {CODEX_AUTH_FILE}")
+                print(f"   Ton tai: {auth_path.exists()}")
                 
                 if not auth_path.exists():
                     raise FileNotFoundError(f"File không tồn tại: {CODEX_AUTH_FILE}")
                 
                 self._codex = CodexOAuth.from_file(CODEX_AUTH_FILE)
-                print(f"✅ CodexOAuth đã kết nối: {self._codex.email or 'unknown'}")
+                print(f"[OK] CodexOAuth da ket noi: {self._codex.email or 'unknown'}")
                 
                 # Kiểm tra authentication status
                 if hasattr(self._codex, 'is_authenticated'):
-                    print(f"   Authentication status: {self._codex.is_authenticated}")
+                    print(f"   Auth status: {self._codex.is_authenticated}")
                     
             except FileNotFoundError as e:
                 raise RuntimeError(
-                    f"❌ Không tìm thấy file auth: {CODEX_AUTH_FILE}\n"
-                    f"   Chi tiết: {str(e)}\n"
-                    "   Hãy chạy: python browser_login.py"
+                    f"[ERROR] Khong tim thay file auth: {CODEX_AUTH_FILE}\n"
+                    f"   Chi tiet: {str(e)}\n"
+                    "   Hay chay: python browser_login.py"
                 )
             except Exception as e:
                 error_type = type(e).__name__
                 raise RuntimeError(
-                    f"❌ Không thể tải token ({error_type}): {str(e)}\n"
-                    "   Hãy chạy: python browser_login.py --refresh hoặc python browser_login.py"
+                    f"[ERROR] Khong the tai token ({error_type}): {str(e)}\n"
+                    "   Hay chay: python browser_login.py --refresh hoac python browser_login.py"
                 )
         return self._codex
 
@@ -138,19 +139,19 @@ class LLMService:
         try:
             # Kiểm tra xem token còn hiệu lực không
             if hasattr(self._codex, 'is_authenticated') and not self._codex.is_authenticated:
-                print("🔄 Token hết hạn, thử làm mới...")
+                print("[INFO] Token het han, thu lam moi...")
                 if hasattr(self._codex, 'refresh_token'):
                     self._codex.refresh_token()
-                    print("✅ Token đã làm mới thành công")
+                    print("[OK] Token da lam moi thanh cong")
                 else:
-                    print("⚠️ Không thể tự động làm mới token, vui lòng đăng nhập lại")
+                    print("[WARN] Khong the tu dong lam moi token, vui long dang nhap lai")
                     self._codex = None
         except Exception as e:
-            print(f"⚠️ Lỗi khi làm mới token: {e}")
+            print(f"[WARN] Loi khi lam moi token: {e}")
             self._codex = None
 
     def _get_rag(self) -> "LocalRAG":
-        """Lazy-load RAG client."""
+        """Lazy-load RAG client (fuzzy search only, no embedding model needed)."""
         if self._rag is None:
             codex = self._get_codex()
             self._rag = LocalRAG(
@@ -158,32 +159,25 @@ class LLMService:
                 chunk_size=CHUNK_SIZE,
                 chunk_overlap=CHUNK_OVERLAP,
             )
-
-            # Bật semantic search với ChromaDB (persist directory)
-            success = self._rag.enable_semantic_search(
-                persist_directory=str(CHROMA_PERSIST_DIR),
-                embedding_profile="balanced",  # paraphrase-multilingual-MiniLM-L12-v2
-            )
-            if not success:
-                print("⚠️ Không bật được semantic search, dùng fuzzy search thay thế.")
+            # Dung fuzzy search - khong can sentence-transformers hay ChromaDB
+            print("[INFO] LocalRAG khoi tao xong (fuzzy search mode).")
 
         return self._rag
 
     def load_files_into_kb(self, file_paths: List[str]) -> int:
         """
-        Nạp danh sách file vào knowledge base, index vào ChromaDB.
-        Trả về số chunk đã được index.
+        Nap danh sach file vao knowledge base (fuzzy search, khong can index ChromaDB).
+        Tra ve so chunk da load.
         """
         rag = self._get_rag()
 
-        # Tải file vào KB
+        # Tai file vao KB (chi can load, khong can index vector)
         kb = rag.load_files(file_paths, name=self._kb_name)
         self._kb = kb
 
-        # Index vào ChromaDB
-        indexed = rag.index_knowledge_base(kb, force_reindex=True)
-        print(f"✅ Đã index {indexed} chunks từ {len(file_paths)} file.")
-        return indexed
+        chunk_count = len(kb.documents)
+        print(f"[OK] Da load {chunk_count} chunks tu {len(file_paths)} file (fuzzy search mode).")
+        return chunk_count
 
     def reload_all_files(self, file_paths: List[str]) -> int:
         """
@@ -194,21 +188,36 @@ class LLMService:
             return 0
         return self.load_files_into_kb(file_paths)
 
-    def search(self, query: str, top_k: int = 5) -> List[SearchResult]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        allowed_filenames: List[str] = None,
+    ) -> List[SearchResult]:
         """
-        Tìm kiếm các chunk liên quan đến câu hỏi.
-        Dùng semantic search nếu có, fallback về fuzzy search.
+        Tim kiem cac chunk lien quan den cau hoi bang fuzzy search.
+
+        Args:
+            query: Câu hỏi tìm kiếm.
+            top_k: Số kết quả trả về tối đa.
+            allowed_filenames: Chỉ tìm trong các file có tên nằm trong danh sách này.
+                               None = tìm trong tất cả file.
         """
         rag = self._get_rag()
         if self._kb is None:
             return []
 
-        # Thử semantic search trước
-        if rag.has_semantic_search:
-            results = rag.semantic_search(self._kb, query, limit=top_k, min_score=0.3)
-        else:
-            results = rag.search(self._kb, query, limit=top_k, min_score=0.2)
+        if allowed_filenames:
+            # Tìm kiếm với limit lớn hơn để lọc được đúng top_k sau khi filter
+            search_limit = max(top_k * 10, 50)
+            results = rag.search(self._kb, query, limit=search_limit, min_score=0.1)
+            # Lọc chỉ giữ chunk thuộc các file được phép
+            allowed_set = set(allowed_filenames)
+            results = [r for r in results if r.chunk.filename in allowed_set]
+            return results[:top_k]
 
+        # Không lọc theo file – tìm kiếm toàn bộ KB
+        results = rag.search(self._kb, query, limit=top_k, min_score=0.1)
         return results
 
     def generate_answer(
@@ -216,6 +225,7 @@ class LLMService:
         question: str,
         context_chunks: List[SearchResult],
         model: str = None,
+        history: List[dict] = None,
     ) -> str:
         """
         Gọi Codex để sinh câu trả lời dựa trên context.
@@ -247,10 +257,21 @@ class LLMService:
                     f"CÂU HỎI: {question}"
                 )
 
+                # Build history objects
+                history_objs = []
+                if history:
+                    try:
+                        from codex_oauth_module.models import ChatMessage # type: ignore
+                        for msg in history:
+                            history_objs.append(ChatMessage(role=msg["role"], content=msg["content"]))
+                    except Exception as e:
+                        print(f"Warning: could not parse history: {e}")
+
                 # Gọi CodexOAuth.chat()
                 answer = codex.chat(
                     message=full_prompt,
                     model=model,
+                    history=history_objs,
                     system_prompt=RAG_SYSTEM_PROMPT,
                     reasoning_effort=CODEX_REASONING_EFFORT,
                 )
@@ -259,11 +280,11 @@ class LLMService:
                 error_msg = str(e).lower()
                 # Nếu lỗi liên quan tới token, thử làm mới và retry
                 if "token" in error_msg and "expired" in error_msg and attempt < max_retries - 1:
-                    print(f"⚠️ Lần {attempt + 1}: Token hết hạn, thử làm mới...")
+                    print(f"[WARN] Lan {attempt + 1}: Token het han, thu lam moi...")
                     self._refresh_token_if_needed()
                     continue
                 # Nếu không phải token, hoặc đã retry hết lần, ném lỗi
-                raise RuntimeError(f"❌ Lỗi từ AI: {str(e)}")
+                raise RuntimeError(f"[ERROR] Loi tu AI: {str(e)}")
 
     def is_healthy(self) -> dict:
         """Kiểm tra trạng thái kết nối."""

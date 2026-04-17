@@ -19,11 +19,13 @@ def answer_question(
     top_k: int,
     db: Session,
     llm_service: LLMService,
+    history: List[dict] = None,
+    doc_ids: List[int] = None,
 ) -> AskResponse:
     """
     Luồng Q&A hoàn chỉnh:
         1. Kiểm tra có tài liệu đã index chưa
-        2. Tìm kiếm Top K chunks liên quan (Retrieval)
+        2. Tìm kiếm Top K chunks liên quan (Retrieval) – tuỳ chọn giới hạn theo doc_ids
         3. Gọi Codex sinh câu trả lời (Generation)
         4. Lưu vào chat_history
         5. Trả về kết quả + sources
@@ -33,6 +35,8 @@ def answer_question(
         top_k: Số chunk tìm kiếm
         db: SQLAlchemy session
         llm_service: Singleton LLMService
+        history: Lịch sử trò chuyện
+        doc_ids: Danh sách ID tài liệu cần giới hạn tìm kiếm (None = tất cả)
 
     Returns:
         AskResponse với answer + sources
@@ -54,9 +58,27 @@ def answer_question(
             history_id=-1,
         )
 
+    # Xây dựng allowed_filenames nếu người dùng chọn tài liệu cụ thể
+    allowed_filenames = None
+    if doc_ids:
+        from pathlib import Path
+        allowed_filenames = []
+        for did in doc_ids:
+            doc = doc_repo.get_by_id(did)
+            if doc:
+                p = Path(doc.file_path)
+                # Tên file gốc (e.g. "report.pdf")
+                allowed_filenames.append(p.name)
+                # Tên file .extracted.txt nếu được dùng khi indexing (e.g. "report.extracted.txt")
+                allowed_filenames.append(p.with_suffix(".extracted.txt").name)
+
     # Bước 1: Retrieval - tìm chunks liên quan
     try:
-        search_results: List[SearchResult] = llm_service.search(question, top_k=top_k)
+        search_results: List[SearchResult] = llm_service.search(
+            question,
+            top_k=top_k,
+            allowed_filenames=allowed_filenames,
+        )
     except Exception as e:
         print(f"⚠️ Lỗi search: {str(e)}")
         raise RuntimeError(f"❌ Lỗi tìm kiếm: {str(e)}")
@@ -66,6 +88,7 @@ def answer_question(
         answer = llm_service.generate_answer(
             question=question,
             context_chunks=search_results,
+            history=history,
         )
     except RuntimeError as e:
         # Nếu là lỗi từ llm_service, pass through
