@@ -221,8 +221,10 @@ def process_and_index_document(
 
 def reload_indexed_documents(doc_repo: DocumentRepository, llm_service: LLMService):
     """
-    Khởi động lại server → nạp lại tất cả tài liệu đã INDEXED vào RAM/ChromaDB.
+    Khởi động lại server → nạp lại tất cả tài liệu đã INDEXED vào RAM.
     Cần thiết vì LocalRAG lưu KB trong memory.
+
+    Ưu tiên dùng file .extracted.txt vì LocalRAG không parse được binary PDF/DOCX.
     """
     indexed_docs = doc_repo.get_indexed()
     if not indexed_docs:
@@ -231,16 +233,21 @@ def reload_indexed_documents(doc_repo: DocumentRepository, llm_service: LLMServi
 
     file_paths = []
     for doc in indexed_docs:
-        # Kiểm tra file còn tồn tại không
         p = Path(doc.file_path)
+
+        # Ưu tiên 1: file .extracted.txt (LocalRAG đọc được tốt nhất)
+        txt_p = p.with_suffix(".extracted.txt")
+        if txt_p.exists():
+            file_paths.append(str(txt_p))
+            continue
+
+        # Ưu tiên 2: file gốc (chỉ phù hợp với TXT/MD, không phù hợp PDF/DOCX)
         if p.exists():
             file_paths.append(str(p))
         else:
-            # Thử tìm file .extracted.txt
-            txt_p = p.with_suffix(".extracted.txt")
-            if txt_p.exists():
-                file_paths.append(str(txt_p))
+            print(f"⚠️  Không tìm thấy file cho doc ID={doc.id}: {p}")
 
     if file_paths:
         count = llm_service.reload_all_files(file_paths)
         print(f"🔄 Reload thành công {count} chunks từ {len(file_paths)} file.")
+

@@ -94,6 +94,8 @@ class LLMService:
         self._rag: Optional[LocalRAG] = None
         self._kb: Optional[LocalKnowledgeBase] = None
         self._kb_name = "rag_knowledge_base"
+        # Track tất cả đường dẫn file đã được load vào KB để có thể tích lũy khi upload mới
+        self._indexed_file_paths: list = []
 
     def _get_codex(self) -> "CodexOAuth":
         """Lazy-load Codex client."""
@@ -166,27 +168,47 @@ class LLMService:
 
     def load_files_into_kb(self, file_paths: List[str]) -> int:
         """
-        Nap danh sach file vao knowledge base (fuzzy search, khong can index ChromaDB).
-        Tra ve so chunk da load.
+        Nạp thêm file mới vào knowledge base (tích lũy, không ghi đè file cũ).
+        Trả về tổng số chunk hiện tại trong KB.
+
+        Lưu ý: KB của LocalRAG không có API "append", nên chúng ta tự quản lý
+        danh sách file và reload toàn bộ mỗi lần có file mới.
         """
         rag = self._get_rag()
 
-        # Tai file vao KB (chi can load, khong can index vector)
-        kb = rag.load_files(file_paths, name=self._kb_name)
+        # Thêm file mới vào danh sách tích lũy (tránh trùng)
+        for fp in file_paths:
+            if fp not in self._indexed_file_paths:
+                self._indexed_file_paths.append(fp)
+
+        # Load TOÀN BỘ danh sách để KB luôn đầy đủ
+        kb = rag.load_files(self._indexed_file_paths, name=self._kb_name)
         self._kb = kb
 
         chunk_count = len(kb.documents)
-        print(f"[OK] Da load {chunk_count} chunks tu {len(file_paths)} file (fuzzy search mode).")
+        print(
+            f"[OK] KB co {chunk_count} chunks tu {len(self._indexed_file_paths)} file "
+            f"(moi them: {len(file_paths)} file)."
+        )
         return chunk_count
 
     def reload_all_files(self, file_paths: List[str]) -> int:
         """
-        Tải lại toàn bộ file đã INDEXED từ danh sách đường dẫn.
-        Dùng khi khởi động lại server.
+        Thay thế toàn bộ KB bằng danh sách file mới.
+        Dùng khi khởi động lại server (xóa cache cũ và load lại).
         """
         if not file_paths:
             return 0
-        return self.load_files_into_kb(file_paths)
+
+        rag = self._get_rag()
+        # Reset danh sách và load mới hoàn toàn
+        self._indexed_file_paths = list(file_paths)
+        kb = rag.load_files(self._indexed_file_paths, name=self._kb_name)
+        self._kb = kb
+
+        chunk_count = len(kb.documents)
+        print(f"[OK] Reload KB: {chunk_count} chunks tu {len(file_paths)} file.")
+        return chunk_count
 
     def search(
         self,
@@ -214,10 +236,23 @@ class LLMService:
             # Lọc chỉ giữ chunk thuộc các file được phép
             allowed_set = set(allowed_filenames)
             results = [r for r in results if r.chunk.filename in allowed_set]
-            return results[:top_k]
+            results = results[:top_k]
+        else:
+            # Không lọc theo file – tìm kiếm toàn bộ KB
+            results = rag.search(self._kb, query, limit=top_k, min_score=0.1)
 
-        # Không lọc theo file – tìm kiếm toàn bộ KB
-        results = rag.search(self._kb, query, limit=top_k, min_score=0.1)
+        # Fallback: Nếu không tìm thấy gì (vd: câu hỏi là "tóm tắt tài liệu này" không có keyword trùng)
+        # thì ta tự động lấy top_k chunk đầu tiên làm ngữ cảnh trả về để AI tóm tắt hoặc tự nhận định.
+        if not results:
+            fallback_results = []
+            for doc in self._kb.documents:
+                if allowed_filenames and doc.filename not in allowed_set:
+                    continue
+                fallback_results.append(SearchResult(chunk=doc, score=0.01, matched_text=""))
+                if len(fallback_results) >= top_k:
+                    break
+            results = fallback_results
+
         return results
 
     def generate_answer(
