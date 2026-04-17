@@ -75,20 +75,28 @@ def _create_temp_txt(file_path: Path, text: str) -> Path:
 
 def extract_document_text(file_path: Path, file_type: str) -> Tuple[str, int]:
     """
-    Bóc tách text từ tài liệu theo loại file.
+    Bóc tách text từ tài liệu theo loại file và làm sạch các ký tự đặc biệt gây lỗi.
     
     Returns:
         Tuple (text, page_count)
     """
     if file_type == "pdf":
-        return _extract_text_from_pdf(file_path)
+        text, page_count = _extract_text_from_pdf(file_path)
     elif file_type == "docx":
-        return _extract_text_from_docx(file_path)
+        text, page_count = _extract_text_from_docx(file_path)
     elif file_type in ("txt", "md"):
-        return _extract_text_from_txt(file_path)
+        text, page_count = _extract_text_from_txt(file_path)
     else:
         # Thử đọc như text
-        return _extract_text_from_txt(file_path)
+        text, page_count = _extract_text_from_txt(file_path)
+
+    # LÀM SẠCH VĂN BẢN (Sanitize Text)
+    # Loại bỏ NULL bytes (\x00) gây lỗi "A string literal cannot contain NUL" trong SQLite và Chroma
+    if text:
+        text = text.replace('\x00', '')
+        text = text.replace('\u0000', '')
+
+    return text, page_count
 
 
 def get_document_content(doc_id: int, doc_repo: DocumentRepository) -> Optional[dict]:
