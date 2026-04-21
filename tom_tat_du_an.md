@@ -184,7 +184,22 @@ rag_project/
 - **Modular Design:** Clean architecture với separation of concerns
 - **Production Ready:** Error handling, logging, health checks
 
+## Các Tính Năng Đã Cải Thiện & Hoàn Thiện (Báo Cáo Lần 2 so với Lần 1)
+
+Trong quá trình phát triển giai đoạn tiếp theo của dự án, hệ thống đã được khắc phục triệt để các lỗi kỹ thuật và bổ sung thêm các nghiệp vụ quan trọng nhằm nang cao tính ổn định và tính bảo mật của hệ thống:
+
+### 1. Khắc Phục Lỗi Streaming & API RAG
+- **Sửa Lỗi Tương Tác Streaming:** Giải quyết dứt điểm lỗi `Attempted to access streaming response content, without having called read()` ở backend bằng cách cấu hình chuẩn chế độ `stream=False` khi giao tiếp API với mô hình LLM (CodexOAuth), đảm bảo dữ liệu trả về mượt mà hơn.
+- **Sửa Lỗi Khởi Tạo Vector Database:** Khắc phục tình trạng trả về `500 Internal Server Error` và các lỗi `NoneType` khi khởi tạo `LocalRAG` hay lúc đếm số lượng chunk (`count`) trong ChromaDB, giúp quá trình nhúng (embedding) và tìm kiếm (retrieval) hoạt động ổn định.
+
+### 2. Nâng Cấp Quản Lý Tài Liệu (Document Management)
+- **Cơ Chế Sanitize Text:** Bổ sung việc loại bỏ, chuẩn hoá các ký tự đặc biệt hay mã hoá lỗi từ PDF/DOCX trước khi index, khắc phục hoàn toàn lỗi khi mã hóa (encoding) tài liệu chứa ký tự lạ.
+- **Lựa Chọn & Tái Sử Dụng Document (Existing Files):** Cải tiến UX giúp người dùng dễ dàng chọn, trích xuất hay tham vấn các files đã upload thành công từ trước mà không cần tải lại file nhiều lần, tối ưu hoá thời gian xử lý.
+
+### 3. Nâng Cấp Bảo Mật & Xác Thực
+- **Luồng Đăng Nhập Mới (Browser Login):** Triển khai thêm thành phần Xác thực người dùng bằng trình duyệt (`browser_login.py`), hỗ trợ OAuth và quản lý phiên đăng nhập một cách bảo mật hơn, độc lập so với việc chỉ dùng API Key từ biến môi trường.
+- **Ổn Định Định Danh API:** Refactor lại cách hệ thống `llm_service.py` phát hiện thư mục và nạp token Certificate (`CODEX_AUTH_FILE`), giúp dự án không bị văng lỗi (crash) khi xác thực quyền truy cập với AI Service.
+
 ## Kết Luận
 
-Dự án Smart Document Reader là một ứng dụng RAG hoàn chỉnh, kết hợp các công nghệ hiện đại để tạo ra một hệ thống đọc tài liệu thông minh. Với kiến trúc backend/frontend tách biệt, tích hợp AI mạnh mẽ, và giao diện người dùng thân thiện, dự án này thể hiện khả năng áp dụng các kỹ thuật AI tiên tiến vào các ứng dụng thực tế.</content>
-<parameter name="filePath">c:\project\new\RAG\tom_tat_du_an.md
+Dự án Smart Document Reader trong Báo cáo Lần 2 đã trưởng thành hơn rất nhiều với độ ổn định cao. Những tính năng được cải thiện không chỉ giải quyết toàn bộ các bug nghiêm trọng (crash API, lỗi streaming, lỗi đọc file special characters) từ Lần 1 mà còn mang lại sự trơn tru trong tương tác với AI và quản trị file. Hệ thống đã tiến thêm một bước dài tới trạng thái Production-ready hoàn chỉnh.
