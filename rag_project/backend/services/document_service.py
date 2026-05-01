@@ -257,5 +257,5 @@ def reload_indexed_documents(doc_repo: DocumentRepository, llm_service: LLMServi
 
     if file_paths:
         count = llm_service.reload_all_files(file_paths)
-        print(f"🔄 Reload thành công {count} chunks từ {len(file_paths)} file.")
+        print(f"[OK] Reload thanh cong {count} chunks tu {len(file_paths)} file.")
 

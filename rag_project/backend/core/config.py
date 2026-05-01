@@ -1,6 +1,6 @@
 """
-Core Configuration - RAG Project
-Đọc cấu hình từ file .env
+Core Configuration - RAG Project (Full-Context Edition)
+Chạy hoàn toàn offline — Full-Context Mode, không giới hạn token.
 """
 
 import os
@@ -12,31 +12,41 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ============================================================
-# Đường dẫn để import codex_oauth_module từ thư mục cha
+# Đường dẫn gốc
 # ============================================================
-# Thư mục cha của rag_project chính là codex_oauth_module
-MODULE_ROOT = Path(__file__).parent.parent.parent  # → codex_oauth_module/
+MODULE_ROOT = Path(__file__).parent.parent.parent
 if str(MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(MODULE_ROOT))
 
 # ============================================================
-# Cấu hình Codex OAuth (LLM)
-# Giống codex_oauth_module/constants.py — OAuth app id công khai của Codex CLI
+# Cấu hình Local LLM (LM Studio / Ollama)
+# API tương thích OpenAI — LM Studio cổng 1234, Ollama cổng 11434/v1
 # ============================================================
-CODEX_CLIENT_ID: str = os.getenv(
-    "CODEX_CLIENT_ID",
-    "app_EMoamEEZ73f0CkXaXp7hrann",
-)
-CODEX_TOKEN_URL: str = os.getenv(
-    "CODEX_TOKEN_URL",
-    "https://auth.openai.com/oauth/token",
-)
-CODEX_AUTH_FILE: str = str(
-    Path(os.path.expanduser(os.getenv("CODEX_AUTH_FILE", "~/.codex/auth.json"))).expanduser()
-)
-CODEX_MODEL: str = os.getenv("CODEX_MODEL", "gpt-5.2-codex")
-CODEX_REASONING_EFFORT: str = os.getenv("CODEX_REASONING_EFFORT", "medium")
-EMBEDDING_PROFILE: str = os.getenv("EMBEDDING_PROFILE", "fast")
+LOCAL_LLM_API_BASE: str = os.getenv("LOCAL_LLM_API_BASE", "http://localhost:1234/v1")
+LOCAL_LLM_API_KEY: str = os.getenv("LOCAL_LLM_API_KEY", "lm-studio")
+LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL", "local-model")
+
+# ============================================================
+# FULL-CONTEXT MODE — Không giới hạn token
+# Đọc toàn bộ tài liệu, trả lời chính xác nhất có thể.
+# Giá trị rất lớn để không cắt xén nội dung tài liệu.
+# Model LM Studio sẽ tự xử lý giới hạn context window của nó.
+# ============================================================
+# Số ký tự tối đa đưa vào prompt (500,000 ≈ toàn bộ sách 400 trang)
+LLM_MAX_CONTENT_CHARS: int = int(os.getenv("LLM_MAX_CONTENT_CHARS", "500000"))
+
+# Token output tối đa — để lớn để AI trả lời đầy đủ, chi tiết
+LLM_MAX_OUTPUT_TOKENS: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "4096"))
+
+# Ngưỡng tự động chọn Full-Context vs RAG (ký tự)
+# Tài liệu nhỏ hơn ngưỡng này → đưa toàn bộ vào context (chính xác 100%)
+# Tài liệu lớn hơn → dùng RAG với max chunks (vẫn rất tốt)
+FULL_CONTEXT_THRESHOLD_CHARS: int = int(os.getenv("FULL_CONTEXT_THRESHOLD_CHARS", "400000"))
+
+# ============================================================
+# Cấu hình ChromaDB & Embedding (chạy offline hoàn toàn)
+# ============================================================
+EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 
 # ============================================================
 # Cấu hình lưu trữ file
@@ -52,32 +62,22 @@ CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================
 # Cấu hình RAG / Chunking
+# Chunk lớn hơn = ngữ cảnh phong phú hơn, ít mất thông tin hơn
 # ============================================================
-CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1500"))
-CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
-TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "5"))
+CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "600"))       # 600 từ ≈ 1 trang A4
+CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "80"))  # Overlap lớn hơn = ít mất đoạn chuyển tiếp
+TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "15"))  # Lấy nhiều chunks hơn khi dùng RAG mode
 
 # ============================================================
-# System Prompt cho RAG (tiếng Việt)
+# System Prompt cho RAG — Yêu cầu AI đọc kỹ, trả lời đầy đủ
 # ============================================================
-RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh, được hỗ trợ bởi hệ thống RAG (Retrieval-Augmented Generation).
-
-Nhiệm vụ của bạn:
-1. Trả lời câu hỏi DỰA TRÊN TÀI LIỆU được cung cấp trong phần "NGỮ CẢNH".
-2. Nếu thông tin KHÔNG CÓ trong tài liệu, hãy nói rõ: "Thông tin này không có trong tài liệu đã tải lên."
-3. Trích dẫn rõ nguồn tài liệu khi trả lời.
-4. Trả lời rõ ràng, súc tích và chính xác bằng tiếng Việt.
-5. KHÔNG bịa đặt thông tin ngoài tài liệu."""
+RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên đọc và phân tích tài liệu. 
+Hãy đọc TOÀN BỘ nội dung tài liệu được cung cấp một cách kỹ lưỡng và trả lời câu hỏi một cách ĐẦY ĐỦ, CHI TIẾT và CHÍNH XÁC bằng tiếng Việt.
+Trả lời dựa HOÀN TOÀN vào nội dung tài liệu. Nếu thông tin không có trong tài liệu, hãy nói rõ điều đó.
+Không bịa đặt hay suy đoán ngoài phạm vi tài liệu."""
 
 # ============================================================
-# System Prompt cho Tóm Tắt Tài Liệu
+# System Prompt cho Tóm Tắt — Toàn diện hơn
 # ============================================================
-SUMMARY_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên tóm tắt tài liệu.
-
-Nhiệm vụ:
-1. Đọc kỹ nội dung tài liệu được cung cấp.
-2. Tóm tắt ngắn gọn, rõ ràng bằng tiếng Việt.
-3. Nêu các ý chính, thông tin quan trọng.
-4. Giữ bố cục: Chủ đề chính → Các điểm nổi bật → Kết luận.
-5. Tóm tắt không quá 500 từ.
-6. Sử dụng bullet points để dễ đọc."""
+SUMMARY_SYSTEM_PROMPT = """Tóm tắt tài liệu sau bằng tiếng Việt một cách đầy đủ và toàn diện.
+Nêu tất cả ý chính, các điểm quan trọng, và kết luận. Dùng bullet points rõ ràng."""

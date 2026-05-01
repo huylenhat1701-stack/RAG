@@ -41,4 +41,4 @@ def init_db():
     # Import các model để SQLAlchemy nhận diện
     from ..models.domain import Document, ChatHistory  # noqa: F401
     Base.metadata.create_all(bind=engine)
-    print("✅ Database đã được khởi tạo.")
+    print("[OK] Database da duoc khoi tao.")

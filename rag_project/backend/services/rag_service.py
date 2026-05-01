@@ -1,9 +1,10 @@
 """
 RAG Service - Điều phối luồng Hỏi & Đáp và Tóm tắt tài liệu
-Kết hợp search (Retrieval) và generate (Generation).
+Full-Context Edition: tự động chọn chế độ đọc toàn bộ hoặc RAG tùy độ dài tài liệu.
 """
 
-from typing import Tuple, List
+from pathlib import Path
+from typing import List
 from sqlalchemy.orm import Session
 
 from ..repositories.document_repo import DocumentRepository
@@ -11,7 +12,11 @@ from ..repositories.history_repo import HistoryRepository
 from ..services.llm_service import LLMService, SearchResult
 from ..services.document_service import get_document_content
 from ..models.schemas import AskResponse, SourceInfo, DocumentSummaryResponse, ExerciseResponse
-from ..core.config import CODEX_MODEL, SUMMARY_SYSTEM_PROMPT
+from ..core.config import (
+    SUMMARY_SYSTEM_PROMPT,
+    LLM_MAX_CONTENT_CHARS,
+    FULL_CONTEXT_THRESHOLD_CHARS,
+)
 
 
 def answer_question(
@@ -23,110 +28,168 @@ def answer_question(
     doc_ids: List[int] = None,
 ) -> AskResponse:
     """
-    Luồng Q&A hoàn chỉnh:
-        1. Kiểm tra có tài liệu đã index chưa
-        2. Tìm kiếm Top K chunks liên quan (Retrieval) – tuỳ chọn giới hạn theo doc_ids
-        3. Gọi Codex sinh câu trả lời (Generation)
-        4. Lưu vào chat_history
-        5. Trả về kết quả + sources
+    Luồng Q&A với Full-Context Mode:
 
-    Args:
-        question: Câu hỏi của người dùng
-        top_k: Số chunk tìm kiếm
-        db: SQLAlchemy session
-        llm_service: Singleton LLMService
-        history: Lịch sử trò chuyện
-        doc_ids: Danh sách ID tài liệu cần giới hạn tìm kiếm (None = tất cả)
+    TRƯỜNG HỢP 1: Người dùng chọn 1 tài liệu cụ thể
+        → Đọc toàn bộ nội dung tài liệu đó
+        → Nếu vừa context window: Full-Context Mode (chính xác 100%)
+        → Nếu quá lớn: RAG Mode với max top_k (vẫn rất tốt)
 
-    Returns:
-        AskResponse với answer + sources
+    TRƯỜNG HỢP 2: Người dùng chọn nhiều tài liệu hoặc tất cả
+        → Ghép toàn bộ nội dung các tài liệu đã chọn
+        → Nếu vừa: Full-Context Mode ghép nhiều tài liệu
+        → Nếu quá lớn: RAG Mode với top_k cao
     """
     doc_repo = DocumentRepository(db)
     hist_repo = HistoryRepository(db)
 
-    # Kiểm tra có tài liệu INDEXED chưa
     indexed_count = doc_repo.count_indexed()
     if indexed_count == 0:
         return AskResponse(
             question=question,
             answer=(
-                "⚠️ Chưa có tài liệu nào được tải lên và xử lý.\n"
-                "Vui lòng vào tab **Quản lý Tài liệu** để upload tài liệu trước."
+                "Chưa có tài liệu nào được tải lên và xử lý.\n"
+                "Vui lòng vào tab Quản Lý Tài Liệu để upload tài liệu trước."
             ),
             sources=[],
-            model_used=CODEX_MODEL,
+            model_used=llm_service._model_name,
             history_id=-1,
+            mode="none",
+            context_chars=0,
         )
 
-    # Xây dựng allowed_filenames nếu người dùng chọn tài liệu cụ thể
+    # ----------------------------------------------------------------
+    # Xây dựng danh sách tài liệu được phép truy cập
+    # ----------------------------------------------------------------
     allowed_filenames = None
+    target_docs = []  # Danh sách doc objects để đọc full content
+
     if doc_ids:
-        from pathlib import Path
         allowed_filenames = []
         for did in doc_ids:
             doc = doc_repo.get_by_id(did)
             if doc:
-                p = Path(doc.file_path)
-                # Tên file gốc (e.g. "report.pdf")
-                allowed_filenames.append(p.name)
-                # Tên file .extracted.txt nếu được dùng khi indexing (e.g. "report.extracted.txt")
-                allowed_filenames.append(p.with_suffix(".extracted.txt").name)
+                allowed_filenames.append(Path(doc.file_path).name)
+                target_docs.append(doc)
+    else:
+        # Không chọn cụ thể → lấy tất cả tài liệu đã INDEXED
+        target_docs = doc_repo.get_indexed()
 
-    # Bước 1: Retrieval - tìm chunks liên quan
-    try:
-        search_results: List[SearchResult] = llm_service.search(
-            question,
-            top_k=top_k,
-            allowed_filenames=allowed_filenames,
-        )
-    except Exception as e:
-        print(f"⚠️ Lỗi search: {str(e)}")
-        raise RuntimeError(f"❌ Lỗi tìm kiếm: {str(e)}")
+    # ----------------------------------------------------------------
+    # Thử Full-Context Mode: đọc toàn bộ nội dung tài liệu
+    # ----------------------------------------------------------------
+    combined_content = ""
+    doc_labels = []
 
-    # Bước 2: Generation - gọi Codex sinh câu trả lời
-    try:
-        answer = llm_service.generate_answer(
-            question=question,
-            context_chunks=search_results,
-            history=history,
-        )
-    except RuntimeError as e:
-        # Nếu là lỗi từ llm_service, pass through
-        raise
-    except Exception as e:
-        error_msg = str(e)
-        if "token" in error_msg.lower() or "auth" in error_msg.lower():
-            raise RuntimeError(f"❌ Lỗi xác thực: {error_msg}")
-        raise RuntimeError(f"❌ Lỗi sinh câu trả lời: {error_msg}")
+    for doc in target_docs:
+        content_data = get_document_content(doc.id, doc_repo)
+        if content_data and content_data.get("content"):
+            content = content_data["content"]
+            doc_labels.append(doc.file_name)
 
-    # Bước 3: Chuẩn bị danh sách sources
-    sources_for_response = []
-    sources_for_db = []
+            if len(target_docs) == 1:
+                # 1 tài liệu: không cần header phân cách
+                combined_content = content
+            else:
+                # Nhiều tài liệu: thêm header phân cách
+                combined_content += (
+                    f"\n\n{'='*60}\n"
+                    f"TÀI LIỆU: {doc.file_name}\n"
+                    f"{'='*60}\n"
+                    f"{content}"
+                )
 
-    seen_files = set()
-    for result in search_results:
-        filename = result.chunk.filename
-        if filename not in seen_files:
-            seen_files.add(filename)
-            sources_for_response.append(
-                SourceInfo(file_name=filename, relevance_score=round(result.score, 3))
+    # Quyết định chế độ dựa trên tổng độ dài nội dung
+    use_full_context = (
+        combined_content
+        and len(combined_content) <= FULL_CONTEXT_THRESHOLD_CHARS
+    )
+
+    # ----------------------------------------------------------------
+    # FULL-CONTEXT MODE: Đưa toàn bộ nội dung vào LLM
+    # ----------------------------------------------------------------
+    if use_full_context:
+        mode = "full_context"
+        context_chars = len(combined_content)
+        filename_label = ", ".join(doc_labels) if doc_labels else ""
+
+        print(f"[Full-Context Mode] {len(doc_labels)} tài liệu, {context_chars:,} ký tự")
+
+        try:
+            answer = llm_service.generate_answer_full_context(
+                question=question,
+                full_text=combined_content,
+                filename=filename_label,
+                history=history,
             )
-            sources_for_db.append(filename)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Lỗi sinh câu trả lời (Full-Context): {str(e)}")
 
-    # Bước 4: Lưu vào chat_history
-    history = hist_repo.create(
+        # Nguồn trích dẫn = các tài liệu đã đọc
+        sources_for_response = [
+            SourceInfo(file_name=name, relevance_score=1.0)
+            for name in doc_labels
+        ]
+        sources_for_db = doc_labels
+
+    # ----------------------------------------------------------------
+    # RAG MODE: Tài liệu quá lớn → dùng vector search + top_k lớn
+    # ----------------------------------------------------------------
+    else:
+        mode = "rag"
+        print(f"[RAG Mode] Nội dung quá lớn ({len(combined_content):,} ký tự), dùng vector search top_k={top_k}")
+
+        try:
+            search_results: List[SearchResult] = llm_service.search(
+                question, top_k=top_k, allowed_filenames=allowed_filenames
+            )
+        except Exception as e:
+            raise RuntimeError(f"Lỗi tìm kiếm: {str(e)}")
+
+        context_chars = sum(len(r.chunk.text) for r in search_results)
+
+        try:
+            answer = llm_service.generate_answer(
+                question=question,
+                context_chunks=search_results,
+                history=history,
+            )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Lỗi sinh câu trả lời (RAG): {str(e)}")
+
+        # Build sources
+        sources_for_response = []
+        sources_for_db = []
+        seen = set()
+        for r in search_results:
+            fn = r.chunk.filename
+            if fn not in seen:
+                seen.add(fn)
+                sources_for_response.append(SourceInfo(file_name=fn, relevance_score=round(r.score, 3)))
+                sources_for_db.append(fn)
+
+    # ----------------------------------------------------------------
+    # Lưu lịch sử
+    # ----------------------------------------------------------------
+    hist = hist_repo.create(
         question=question,
         answer=answer,
         sources=sources_for_db,
-        model_used=CODEX_MODEL,
+        model_used=llm_service._model_name,
     )
 
     return AskResponse(
         question=question,
         answer=answer,
         sources=sources_for_response,
-        model_used=CODEX_MODEL,
-        history_id=history.id,
+        model_used=llm_service._model_name,
+        history_id=hist.id,
+        mode=mode,
+        context_chars=context_chars,
     )
 
 
@@ -136,61 +199,69 @@ def summarize_document(
     llm_service: LLMService,
 ) -> DocumentSummaryResponse:
     """
-    Tóm tắt tài liệu bằng AI.
-    
-    Luồng:
-        1. Lấy nội dung tài liệu
-        2. Gọi CodexOAuth để tóm tắt
-        3. Lưu tóm tắt vào DB
-        4. Trả về kết quả
+    Tóm tắt tài liệu — Full-Context khi có thể, phân đoạn khi tài liệu lớn.
+    Không giới hạn độ dài nội dung.
     """
     doc_repo = DocumentRepository(db)
     doc = doc_repo.get_by_id(doc_id)
-    
     if not doc:
         raise ValueError(f"Không tìm thấy tài liệu ID={doc_id}")
 
-    # Nếu đã có summary, trả luôn
+    # Nếu đã có summary → trả luôn
     if doc.summary:
         return DocumentSummaryResponse(
             id=doc.id,
             file_name=doc.file_name,
             summary=doc.summary,
-            model_used=CODEX_MODEL,
+            model_used=llm_service._model_name,
         )
 
-    # Lấy nội dung tài liệu
     content_data = get_document_content(doc_id, doc_repo)
     if not content_data or not content_data["content"]:
         raise ValueError("Không thể đọc nội dung tài liệu")
 
-    # Giới hạn nội dung gửi cho AI (tối đa ~6000 chars để không quá dài)
     content = content_data["content"]
-    if len(content) > 6000:
-        content = content[:6000] + "\n\n[... nội dung còn lại đã được cắt bớt ...]"
+    max_chars = LLM_MAX_CONTENT_CHARS  # Dùng giới hạn đã tăng rất cao
 
-    # Gọi CodexOAuth để tóm tắt
-    prompt = (
-        f"TÀI LIỆU CẦN TÓM TẮT: {doc.file_name}\n\n"
-        f"NỘI DUNG:\n{content}"
-    )
+    # Nếu nội dung vừa → tóm tắt thẳng toàn bộ
+    if len(content) <= max_chars:
+        prompt = f"TÀI LIỆU: {doc.file_name}\n\nNỘI DUNG:\n{content}"
+        summary = llm_service.chat_direct(prompt=prompt, system_prompt=SUMMARY_SYSTEM_PROMPT)
+    else:
+        # Chia thành các phần và tóm tắt từng phần (tài liệu rất lớn)
+        segment_size = max_chars // 2  # Mỗi phần nhỏ hơn để có room cho prompt
+        segments = [content[i:i + segment_size] for i in range(0, len(content), segment_size)]
 
-    codex = llm_service._get_codex()
-    summary = codex.chat(
-        message=prompt,
-        model=CODEX_MODEL,
-        system_prompt=SUMMARY_SYSTEM_PROMPT,
-        reasoning_effort="medium",
-    )
+        print(f"[Summarize] Tài liệu dài ({len(content):,} ký tự), chia {len(segments)} đoạn...")
 
-    # Lưu vào DB
+        part_summaries = []
+        for idx, part in enumerate(segments, 1):
+            part_label = f"[Phần {idx}/{len(segments)}] "
+            prompt = f"{part_label}TÀI LIỆU: {doc.file_name}\n\nNỘI DUNG:\n{part}"
+            partial = llm_service.chat_direct(prompt=prompt, system_prompt=SUMMARY_SYSTEM_PROMPT)
+            part_summaries.append(f"**Phần {idx}:**\n{partial}")
+
+        # Tóm tắt tổng hợp từ các tóm tắt con
+        combined = "\n\n".join(part_summaries)
+        if len(combined) > max_chars:
+            combined = combined[:max_chars]
+
+        final_prompt = (
+            f"Dưới đây là tóm tắt từng phần của tài liệu '{doc.file_name}'.\n"
+            f"Hãy tổng hợp thành 1 bản tóm tắt hoàn chỉnh, mạch lạc:\n\n{combined}"
+        )
+        summary = llm_service.chat_direct(
+            prompt=final_prompt,
+            system_prompt="Tổng hợp và tóm tắt lại bằng tiếng Việt, đầy đủ, có bullet points."
+        )
+
     doc_repo.update_summary(doc_id, summary)
 
     return DocumentSummaryResponse(
         id=doc.id,
         file_name=doc.file_name,
         summary=summary,
-        model_used=CODEX_MODEL,
+        model_used=llm_service._model_name,
     )
 
 
@@ -201,7 +272,7 @@ def generate_exercise(
     db: Session,
     llm_service: LLMService,
 ) -> ExerciseResponse:
-    """Tạo bài tập từ nội dung tài liệu bằng CodexOAuth."""
+    """Tạo bài tập từ nội dung đầy đủ của tài liệu."""
     doc_repo = DocumentRepository(db)
     doc = doc_repo.get_by_id(doc_id)
     if not doc:
@@ -209,32 +280,26 @@ def generate_exercise(
 
     content_data = get_document_content(doc_id, doc_repo)
     if not content_data or not content_data["content"]:
-        raise ValueError("Không thể đọc nội dung tài liệu để tạo bài tập")
+        raise ValueError("Không thể đọc nội dung tài liệu")
 
-    content = content_data["content"]
-    if len(content) > 6000:
-        content = content[:6000] + "\n\n[... nội dung còn lại đã được cắt bớt ...]"
+    # Đọc tối đa nội dung có thể (không cắt cứng)
+    content = llm_service._safe_truncate(content_data["content"], LLM_MAX_CONTENT_CHARS)
 
     prompt = (
         f"TẠO {exercise_type.upper()} TỪ TÀI LIỆU: {doc.file_name}\n\n"
-        f"YÊU CẦU: Tạo {count} câu {exercise_type}. \n"
-        f"TRẢ VỀ KẾT QUẢ CÓ CÂU HỎI VÀ ĐÁP ÁN RÕ RÀNG.\n\n"
-        f"NỘI DUNG:\n{content}"
+        f"YÊU CẦU: Tạo {count} câu {exercise_type} rõ ràng, có đáp án chi tiết.\n"
+        f"Câu hỏi phải bám sát nội dung tài liệu.\n\n"
+        f"NỘI DUNG TÀI LIỆU:\n{content}"
     )
 
-    codex = llm_service._get_codex()
-    exercise_text = codex.chat(
-        message=prompt,
-        model=CODEX_MODEL,
-        system_prompt=(
-            f"Bạn là trợ lý giáo dục. Tạo {exercise_type} dựa trên nội dung tài liệu."
-        ),
-        reasoning_effort="medium",
+    exercise_text = llm_service.chat_direct(
+        prompt=prompt,
+        system_prompt=f"Bạn là trợ lý giáo dục. Tạo {exercise_type} từ tài liệu bằng tiếng Việt, câu hỏi rõ ràng và có đáp án."
     )
 
     return ExerciseResponse(
         id=doc.id,
         file_name=doc.file_name,
         exercise_text=exercise_text,
-        model_used=CODEX_MODEL,
+        model_used=llm_service._model_name,
     )

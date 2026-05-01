@@ -288,14 +288,7 @@ def ask_question(
         )
         return response
     except RuntimeError as e:
-        # Lỗi từ LLM service (token, auth, etc.)
-        error_msg = str(e)
-        if "token" in error_msg.lower() or "auth" in error_msg.lower():
-            raise HTTPException(
-                status_code=401,
-                detail=f"{error_msg}\n💡 Vui lòng chạy: python browser_login.py để đăng nhập lại."
-            )
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -346,7 +339,7 @@ def clear_history(db: Session = Depends(get_db)):
     tags=["Hệ thống"],
 )
 def health_check(llm_service: LLMService = Depends(get_llm_service)):
-    """Kiểm tra trạng thái kết nối Codex và RAG."""
+    """Kiểm tra trạng thái kết nối Local LLM và RAG."""
     status = llm_service.is_healthy()
     return {
         "status": "ok" if status.get("codex_connected") else "warning",

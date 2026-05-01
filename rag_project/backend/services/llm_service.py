@@ -1,352 +1,477 @@
 """
-LLM Service - Wrapper cho CodexOAuth và LocalRAG
-Import trực tiếp từ codex_oauth_module (không viết lại).
+LLM Service - Local LLM qua LM Studio / Ollama (OpenAI API Compatible)
+Full-Context Edition — đọc toàn bộ tài liệu, trả lời chính xác nhất.
 """
 
-import sys
+import uuid
+import httpx
 from pathlib import Path
 from typing import Optional, List
+from pydantic import BaseModel
 
-# Thêm đường dẫn của TH MỤC CHA của codex_oauth_module vào sys.path
-# Để có thể import: "import codex_oauth_module"
-_CODEX_MODULE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # → codex_oauth_module/
-_CODEX_PARENT_DIR = _CODEX_MODULE_DIR.parent  # → thư mục chứa codex_oauth_module/
-
-_FALLBACK_DIR = Path(r"C:\Users\HACOM\Documents\openai\codex_oauth_module")
-_FALLBACK_PARENT = _FALLBACK_DIR.parent
-
-if not (_CODEX_MODULE_DIR / "client.py").exists() and (_FALLBACK_DIR / "client.py").exists():
-    _CODEX_MODULE_DIR = _FALLBACK_DIR
-    _CODEX_PARENT_DIR = _FALLBACK_PARENT
-
-for _p in [str(_CODEX_MODULE_DIR), str(_CODEX_PARENT_DIR)]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-# Import từ codex_oauth_module như một package
-try:
-    import codex_oauth_module as _codex_pkg  # noqa # type: ignore
-    from codex_oauth_module.client import CodexOAuth  # type: ignore
-    from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
-    _CODEX_AVAILABLE = True
-    print("[OK] codex_oauth_module import thanh cong.")
-except ImportError:
-    # Fallback: import trực tiếp từ module_root nếu không có __init__.py đúng
-    try:
-        import importlib.util as _ilu
-        def _load(name, path):
-            spec = _ilu.spec_from_file_location(name, path)
-            m = _ilu.module_from_spec(spec)
-            sys.modules[name] = m
-            spec.loader.exec_module(m)
-            return m
-        # Load các file cần thiết
-        _load("codex_oauth_module.constants", str(_CODEX_MODULE_DIR / "constants.py"))
-        _load("codex_oauth_module.exceptions", str(_CODEX_MODULE_DIR / "exceptions.py"))
-        _load("codex_oauth_module.models", str(_CODEX_MODULE_DIR / "models.py"))
-        _load("codex_oauth_module.sse_utils", str(_CODEX_MODULE_DIR / "sse_utils.py"))
-        _load("codex_oauth_module.reasoning", str(_CODEX_MODULE_DIR / "reasoning.py"))
-        _load("codex_oauth_module.tools", str(_CODEX_MODULE_DIR / "tools.py"))
-        _load("codex_oauth_module.instructions", str(_CODEX_MODULE_DIR / "instructions.py"))
-        _load("codex_oauth_module.client", str(_CODEX_MODULE_DIR / "client.py"))
-        _load("codex_oauth_module.vector_store", str(_CODEX_MODULE_DIR / "vector_store.py"))
-        _load("codex_oauth_module.local_rag", str(_CODEX_MODULE_DIR / "local_rag.py"))
-        from codex_oauth_module.client import CodexOAuth  # type: ignore
-        from codex_oauth_module.local_rag import LocalRAG, LocalKnowledgeBase, SearchResult  # type: ignore
-        _CODEX_AVAILABLE = True
-        print("[OK] codex_oauth_module import thanh cong (fallback loader).")
-    except Exception as e:
-        print(f"[WARN] Khong the import codex_oauth_module: {e}")
-        _CODEX_AVAILABLE = False
-        CodexOAuth = None
-        LocalRAG = None
-        LocalKnowledgeBase = None
-        SearchResult = None
+import chromadb
+from sentence_transformers import SentenceTransformer
 
 from ..core.config import (
-    CODEX_AUTH_FILE,
-    CODEX_CLIENT_ID,
-    CODEX_TOKEN_URL,
-    CODEX_MODEL,
-    CODEX_REASONING_EFFORT,
-    EMBEDDING_PROFILE,
+    LOCAL_LLM_API_BASE,
+    LOCAL_LLM_API_KEY,
+    LOCAL_LLM_MODEL,
+    EMBEDDING_MODEL_NAME,
     CHROMA_PERSIST_DIR,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
     RAG_SYSTEM_PROMPT,
+    LLM_MAX_CONTENT_CHARS,
+    LLM_MAX_OUTPUT_TOKENS,
+    FULL_CONTEXT_THRESHOLD_CHARS,
 )
 
-if _CODEX_AVAILABLE:
-    import codex_oauth_module.constants as _codex_constants  # type: ignore
 
-    _codex_constants.CLIENT_ID = CODEX_CLIENT_ID
-    _codex_constants.TOKEN_URL = CODEX_TOKEN_URL
+
+class ChunkDocument(BaseModel):
+    id: str
+    text: str
+    filename: str
+
+
+class SearchResult(BaseModel):
+    chunk: ChunkDocument
+    score: float
+    matched_text: str = ""
 
 
 class LLMService:
     """
-    Service quản lý CodexOAuth và LocalRAG.
-    Là lớp singleton, dùng chung trong suốt vòng đời ứng dụng.
+    Singleton service: Local LLM (LM Studio/Ollama) + ChromaDB RAG.
+    Tự động phát hiện context window của model và giới hạn nội dung phù hợp.
     """
 
+    # Token overhead: hệ thống prompt + câu hỏi + safety buffer
+    _PROMPT_OVERHEAD_TOKENS = 400
+    # Tiếng Việt: trung bình 2.0 ký tự / token
+    _CHARS_PER_TOKEN = 2.0
+
     def __init__(self):
-        self._codex: Optional[CodexOAuth] = None
-        self._rag: Optional[LocalRAG] = None
-        self._kb: Optional[LocalKnowledgeBase] = None
+        self._llm_base_url = LOCAL_LLM_API_BASE
+        self._llm_api_key = LOCAL_LLM_API_KEY
+        self._model_name = LOCAL_LLM_MODEL
+
         self._kb_name = "rag_knowledge_base"
-        # Track tất cả đường dẫn file đã được load vào KB để có thể tích lũy khi upload mới
         self._indexed_file_paths: list = []
 
-    def _get_codex(self) -> "CodexOAuth":
-        """Lazy-load Codex client."""
-        if self._codex is None:
-            if not _CODEX_AVAILABLE:
-                raise RuntimeError(
-                    "CodexOAuth không khả dụng. Kiểm tra lại module."
-                )
-            try:
-                from pathlib import Path
-                auth_path = Path(CODEX_AUTH_FILE)
-                print(f"[INFO] Tim file auth: {CODEX_AUTH_FILE}")
-                print(f"   Ton tai: {auth_path.exists()}")
-                
-                if not auth_path.exists():
-                    raise FileNotFoundError(f"File không tồn tại: {CODEX_AUTH_FILE}")
-                
-                self._codex = CodexOAuth.from_file(CODEX_AUTH_FILE)
-                print(f"[OK] CodexOAuth da ket noi: {self._codex.email or 'unknown'}")
-                
-                # Kiểm tra authentication status
-                if hasattr(self._codex, 'is_authenticated'):
-                    print(f"   Auth status: {self._codex.is_authenticated}")
-                    
-            except FileNotFoundError as e:
-                raise RuntimeError(
-                    f"[ERROR] Khong tim thay file auth: {CODEX_AUTH_FILE}\n"
-                    f"   Chi tiet: {str(e)}\n"
-                    "   Hay chay: python browser_login.py"
-                )
-            except Exception as e:
-                error_type = type(e).__name__
-                raise RuntimeError(
-                    f"[ERROR] Khong the tai token ({error_type}): {str(e)}\n"
-                    "   Hay chay: python browser_login.py --refresh hoac python browser_login.py"
-                )
-        return self._codex
+        # HTTP client với connection pool để tăng tốc độ
+        self._http_client = httpx.Client(
+            timeout=httpx.Timeout(
+                connect=10.0,
+                read=600.0,
+                write=60.0,
+                pool=30.0,
+            ),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
 
-    def _refresh_token_if_needed(self):
-        """Thử refresh token nếu hết hạn."""
-        if self._codex is None:
-            return
+        # Tự động phát hiện context window và tính giới hạn an toàn
+        self._context_window_tokens = self._detect_context_window()
+        self._max_output_tokens = min(
+            LLM_MAX_OUTPUT_TOKENS,
+            max(256, self._context_window_tokens // 4),
+        )
+        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - self._max_output_tokens)
+        self._max_content_chars = min(
+            LLM_MAX_CONTENT_CHARS,
+            int(usable_tokens * self._CHARS_PER_TOKEN),
+        )
+        self._full_context_threshold = self._max_content_chars
+
+        print(
+            f"[OK] Context window: {self._context_window_tokens} tokens | "
+            f"Max content: {self._max_content_chars:,} ký tự | "
+            f"Max output: {self._max_output_tokens} tokens"
+        )
+
+        # Init ChromaDB (bền vững, lưu trên đĩa)
+        self._chroma_client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
+        self._collection = self._chroma_client.get_or_create_collection(name=self._kb_name)
+
+        # Init Embedding Model (offline, dùng model local đã tải)
         try:
-            # Kiểm tra xem token còn hiệu lực không
-            if hasattr(self._codex, 'is_authenticated') and not self._codex.is_authenticated:
-                print("[INFO] Token het han, thu lam moi...")
-                if hasattr(self._codex, 'refresh_token'):
-                    self._codex.refresh_token()
-                    print("[OK] Token da lam moi thanh cong")
-                else:
-                    print("[WARN] Khong the tu dong lam moi token, vui long dang nhap lai")
-                    self._codex = None
+            print(f"[INFO] Loading embedding model: {EMBEDDING_MODEL_NAME} ...")
+            self._embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            print("[OK] Embedding model loaded.")
         except Exception as e:
-            print(f"[WARN] Loi khi lam moi token: {e}")
-            self._codex = None
+            print(f"[ERROR] Cannot load embedding model: {e}")
+            self._embedding_model = None
 
-    def _get_rag(self) -> "LocalRAG":
-        """Lazy-load RAG client (fuzzy search only, no embedding model needed)."""
-        if self._rag is None:
-            codex = self._get_codex()
-            self._rag = LocalRAG(
-                codex_client=codex,
-                chunk_size=CHUNK_SIZE,
-                chunk_overlap=CHUNK_OVERLAP,
+    def __del__(self):
+        """Dóng HTTP client khi service bị hủy."""
+        try:
+            self._http_client.close()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Auto-detect Context Window
+    # ------------------------------------------------------------------
+
+    def _detect_context_window(self) -> int:
+        """
+        Tự động phát hiện context window (số token tối đa) của model đang chạy.
+        - Query LM Studio /v1/models để lấy context_length.
+        - Nếu không lấy được → fallback về 4096 (an toàn cho Gemma 4B).
+        """
+        try:
+            res = self._http_client.get(f"{self._llm_base_url}/models", timeout=6.0)
+            if res.status_code == 200:
+                data = res.json()
+                models = data.get("data", [])
+                if models:
+                    m = models[0]
+                    self._model_name = m.get("id", self._model_name)
+                    # LM Studio có thể trả về context_length trong nhiều key khác nhau
+                    ctx = (
+                        m.get("context_length")
+                        or m.get("max_context_length")
+                        or m.get("n_ctx")
+                        or (m.get("meta") or {}).get("context_length")
+                        or 0
+                    )
+                    if ctx and int(ctx) > 0:
+                        detected = int(ctx)
+                        print(f"[OK] Model '{self._model_name}': context window = {detected} tokens")
+                        return detected
+        except Exception as e:
+            print(f"[WARN] Không thể phát hiện context window: {e}")
+
+        # Fallback: 4096 — an toàn cho Gemma 3 4B và các model nhỏ
+        print("[WARN] Không xác định được context window, dùng mặc định: 4096 tokens")
+        return 4096
+
+    def refresh_context_limits(self):
+        """
+        Cập nhật lại giới hạn context sau khi đổi model trong LM Studio.
+        Gọi endpoint /health sau khi người dùng đổi model.
+        """
+        self._context_window_tokens = self._detect_context_window()
+        self._max_output_tokens = min(
+            LLM_MAX_OUTPUT_TOKENS,
+            max(256, self._context_window_tokens // 4),
+        )
+        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - self._max_output_tokens)
+        self._max_content_chars = min(
+            LLM_MAX_CONTENT_CHARS,
+            int(usable_tokens * self._CHARS_PER_TOKEN),
+        )
+        self._full_context_threshold = self._max_content_chars
+        print(
+            f"[REFRESH] Context window: {self._context_window_tokens} tokens | "
+            f"Max content: {self._max_content_chars:,} ký tự"
+        )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _safe_truncate(self, text: str, max_chars: int = None) -> str:
+        """Cắt nội dung chỉ khi THỰC SỰ vượt quá giới hạn context window của model."""
+        limit = max_chars or self._max_content_chars
+        if len(text) <= limit:
+            return text
+        # Vẫn giữ càng nhiều nội dung càng tốt
+        print(f"[WARN] Tài liệu quá lớn ({len(text):,} ký tự), cắt bớt về {limit:,} ký tự.")
+        return text[:limit] + "\n\n[...Tài liệu quá dài, phần cuối bị lược bỏ. Vui lòng đặt câu hỏi cụ thể hơn...]"
+
+    def _chunk_text(self, text: str, filename: str) -> List[ChunkDocument]:
+        """Chia văn bản thành các đoạn nhỏ theo số từ."""
+        chunks = []
+        words = text.split()
+        step = max(1, CHUNK_SIZE - CHUNK_OVERLAP)
+        for i in range(0, len(words), step):
+            chunk_words = words[i:i + CHUNK_SIZE]
+            if not chunk_words:
+                break
+            chunk_text = " ".join(chunk_words)
+            chunk_id = str(uuid.uuid4())
+            chunks.append(ChunkDocument(id=chunk_id, text=chunk_text, filename=filename))
+        return chunks
+
+    def _call_llm(self, messages: list, timeout: float = 600.0) -> str:
+        """Gọi LM Studio/Ollama qua HTTP. Raise RuntimeError nếu thất bại."""
+        try:
+            response = self._http_client.post(
+                f"{self._llm_base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._llm_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model_name,
+                    "messages": messages,
+                    "temperature": 0.1,          # Thấp hơn = nhất quán hơn, ít sáng tạo hơn
+                    "max_tokens": self._max_output_tokens,
+                    "stream": False,
+                },
+                timeout=timeout,
             )
-            # Dung fuzzy search - khong can sentence-transformers hay ChromaDB
-            print("[INFO] LocalRAG khoi tao xong (fuzzy search mode).")
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            detail = e.response.text
+            raise RuntimeError(
+                f"LM Studio trả về lỗi {e.response.status_code}.\n"
+                f"Chi tiết: {detail}\n"
+                f"Gợi ý: Kiểm tra LM Studio đang chạy tại {self._llm_base_url} và model đã được tải."
+            )
+        except httpx.ConnectError:
+            raise RuntimeError(
+                f"Khong the ket noi den LM Studio tai {self._llm_base_url}.\n"
+                f"Hay bat Local Server trong LM Studio (tab <->) roi thu lai."
+            )
+        except httpx.ReadTimeout:
+            raise RuntimeError(
+                "LM Studio mất quá nhiều thời gian để xử lý.\n"
+                "Tài liệu có thể quá lớn. Hãy thử đặt câu hỏi cụ thể hơn hoặc chọn tài liệu ngắn hơn."
+            )
+        except Exception as e:
+            raise RuntimeError(f"Loi goi Local LLM: {str(e)}")
 
-        return self._rag
+    # ------------------------------------------------------------------
+    # Knowledge Base Management
+    # ------------------------------------------------------------------
 
     def load_files_into_kb(self, file_paths: List[str]) -> int:
-        """
-        Nạp thêm file mới vào knowledge base (tích lũy, không ghi đè file cũ).
-        Trả về tổng số chunk hiện tại trong KB.
+        """Nạp các file vào ChromaDB (tích lũy, không xóa cũ)."""
+        if not self._embedding_model:
+            raise RuntimeError("Embedding model chua duoc khoi tao.")
 
-        Lưu ý: KB của LocalRAG không có API "append", nên chúng ta tự quản lý
-        danh sách file và reload toàn bộ mỗi lần có file mới.
-        """
-        rag = self._get_rag()
-
-        # Thêm file mới vào danh sách tích lũy (tránh trùng)
         for fp in file_paths:
+            path = Path(fp)
+            if not path.exists():
+                continue
+
             if fp not in self._indexed_file_paths:
                 self._indexed_file_paths.append(fp)
 
-        # Load TOÀN BỘ danh sách để KB luôn đầy đủ
-        kb = rag.load_files(self._indexed_file_paths, name=self._kb_name)
-        self._kb = kb
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                content = path.read_text(encoding="latin-1")
 
-        chunk_count = len(kb.documents)
-        print(
-            f"[OK] KB co {chunk_count} chunks tu {len(self._indexed_file_paths)} file "
-            f"(moi them: {len(file_paths)} file)."
-        )
-        return chunk_count
+            chunks = self._chunk_text(content, path.name)
+            if not chunks:
+                continue
+
+            texts = [c.text for c in chunks]
+            embeddings = self._embedding_model.encode(texts, batch_size=32, show_progress_bar=False).tolist()
+
+            self._collection.add(
+                ids=[c.id for c in chunks],
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=[{"filename": c.filename} for c in chunks],
+            )
+            print(f"[OK] Indexed {len(chunks)} chunks from {path.name}")
+
+        return self._collection.count()
 
     def reload_all_files(self, file_paths: List[str]) -> int:
-        """
-        Thay thế toàn bộ KB bằng danh sách file mới.
-        Dùng khi khởi động lại server (xóa cache cũ và load lại).
-        """
-        if not file_paths:
-            return 0
-
-        rag = self._get_rag()
-        # Reset danh sách và load mới hoàn toàn
+        """Cập nhật danh sách file (ChromaDB persistent nên không cần nạp lại)."""
         self._indexed_file_paths = list(file_paths)
-        kb = rag.load_files(self._indexed_file_paths, name=self._kb_name)
-        self._kb = kb
+        return self._collection.count()
 
-        chunk_count = len(kb.documents)
-        print(f"[OK] Reload KB: {chunk_count} chunks tu {len(file_paths)} file.")
-        return chunk_count
+    # ------------------------------------------------------------------
+    # Search (Retrieval)
+    # ------------------------------------------------------------------
 
     def search(
         self,
         query: str,
-        top_k: int = 5,
+        top_k: int = 15,
         allowed_filenames: List[str] = None,
     ) -> List[SearchResult]:
-        """
-        Tim kiem cac chunk lien quan den cau hoi bang fuzzy search.
-
-        Args:
-            query: Câu hỏi tìm kiếm.
-            top_k: Số kết quả trả về tối đa.
-            allowed_filenames: Chỉ tìm trong các file có tên nằm trong danh sách này.
-                               None = tìm trong tất cả file.
-        """
-        rag = self._get_rag()
-        if self._kb is None:
+        """Vector search trong ChromaDB — lấy tối đa chunks liên quan nhất."""
+        if not self._embedding_model or self._collection.count() == 0:
             return []
 
+        query_embedding = self._embedding_model.encode([query]).tolist()
+
+        where_filter = None
         if allowed_filenames:
-            # Tìm kiếm với limit lớn hơn để lọc được đúng top_k sau khi filter
-            search_limit = max(top_k * 10, 50)
-            results = rag.search(self._kb, query, limit=search_limit, min_score=0.1)
-            # Lọc chỉ giữ chunk thuộc các file được phép
-            allowed_set = set(allowed_filenames)
-            results = [r for r in results if r.chunk.filename in allowed_set]
-            results = results[:top_k]
-        else:
-            # Không lọc theo file – tìm kiếm toàn bộ KB
-            results = rag.search(self._kb, query, limit=top_k, min_score=0.1)
+            if len(allowed_filenames) == 1:
+                where_filter = {"filename": allowed_filenames[0]}
+            else:
+                where_filter = {"filename": {"$in": allowed_filenames}}
 
-        # Fallback: Nếu không tìm thấy gì (vd: câu hỏi là "tóm tắt tài liệu này" không có keyword trùng)
-        # thì ta tự động lấy top_k chunk đầu tiên làm ngữ cảnh trả về để AI tóm tắt hoặc tự nhận định.
-        if not results:
-            fallback_results = []
-            for doc in self._kb.documents:
-                if allowed_filenames and doc.filename not in allowed_set:
-                    continue
-                fallback_results.append(SearchResult(chunk=doc, score=0.01, matched_text=""))
-                if len(fallback_results) >= top_k:
-                    break
-            results = fallback_results
+        # Lấy tối đa nhưng không vượt số chunk có sẵn
+        actual_top_k = min(top_k, self._collection.count())
+        if actual_top_k == 0:
+            return []
 
-        return results
+        results = self._collection.query(
+            query_embeddings=query_embedding,
+            n_results=actual_top_k,
+            where=where_filter,
+        )
+
+        search_results = []
+        if results["documents"] and results["documents"][0]:
+            for i in range(len(results["documents"][0])):
+                score = 1.0 / (1.0 + results["distances"][0][i])
+                chunk = ChunkDocument(
+                    id=results["ids"][0][i],
+                    text=results["documents"][0][i],
+                    filename=results["metadatas"][0][i].get("filename", "unknown"),
+                )
+                search_results.append(SearchResult(chunk=chunk, score=score))
+
+        return search_results
+
+    # ------------------------------------------------------------------
+    # Generation — Full-Context Mode (ưu tiên) & RAG Mode (fallback)
+    # ------------------------------------------------------------------
+
+    def generate_answer_full_context(
+        self,
+        question: str,
+        full_text: str,
+        filename: str = "",
+        history: List[dict] = None,
+    ) -> str:
+        """
+        Full-Context Mode: Đưa TOÀN BỘ nội dung tài liệu vào prompt.
+        AI đọc 100% tài liệu → trả lời chính xác nhất có thể.
+        Dùng khi tài liệu đủ nhỏ để fit vào context window của model.
+        """
+        # Chỉ cắt nếu thực sự vượt giới hạn tối đa
+        content = self._safe_truncate(full_text, self._max_content_chars)
+
+        doc_label = f'"{filename}"' if filename else "được cung cấp"
+        full_prompt = (
+            f"{RAG_SYSTEM_PROMPT}\n\n"
+            f"=== TÀI LIỆU {doc_label} (ĐỌC TOÀN BỘ) ===\n"
+            f"{content}\n"
+            f"=== HẾT TÀI LIỆU ===\n\n"
+            f"CÂU HỎI: {question}\n\n"
+            f"TRẢ LỜI (đầy đủ, chi tiết, dựa hoàn toàn vào tài liệu trên):"
+        )
+
+        messages = []
+        if history:
+            messages.extend(history[-4:])
+        messages.append({"role": "user", "content": full_prompt})
+
+        char_count = len(content)
+        print(f"[Full-Context] Gửi {char_count:,} ký tự tới LLM...")
+        return self._call_llm(messages, timeout=600.0)
 
     def generate_answer(
         self,
         question: str,
         context_chunks: List[SearchResult],
-        model: str = None,
         history: List[dict] = None,
     ) -> str:
         """
-        Gọi Codex để sinh câu trả lời dựa trên context.
-        Có retry logic để xử lý token hết hạn.
+        RAG Mode: Sinh câu trả lời từ các chunks được tìm thấy.
+        Dùng khi tài liệu quá lớn cho Full-Context Mode.
         """
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                codex = self._get_codex()
-                model = model or CODEX_MODEL
+        if not context_chunks:
+            context = "Không tìm thấy thông tin liên quan trong tài liệu."
+        else:
+            parts = []
+            for i, r in enumerate(context_chunks, 1):
+                parts.append(f"[Nguồn {i} — {r.chunk.filename}]\n{r.chunk.text}")
+            context = "\n\n---\n\n".join(parts)
 
-                # Xây dựng context từ các chunk tìm thấy
-                if not context_chunks:
-                    context = "⚠️ Không tìm thấy thông tin liên quan trong tài liệu."
-                else:
-                    context_parts = []
-                    for i, result in enumerate(context_chunks, 1):
-                        context_parts.append(
-                            f"--- Nguồn {i}: {result.chunk.filename} (độ phù hợp: {result.score:.0%}) ---\n"
-                            f"{result.chunk.text}"
-                        )
-                    context = "\n\n".join(context_parts)
+        # Cắt context nếu vượt giới hạn
+        context = self._safe_truncate(context, self._max_content_chars)
 
-                # Build prompt
-                full_prompt = (
-                    f"NGỮ CẢNH TỪ TÀI LIỆU:\n"
-                    f"{context}\n\n"
-                    f"---\n\n"
-                    f"CÂU HỎI: {question}"
-                )
+        full_prompt = (
+            f"{RAG_SYSTEM_PROMPT}\n\n"
+            f"=== NGỮ CẢNH TỪ TÀI LIỆU ({len(context_chunks)} đoạn liên quan nhất) ===\n"
+            f"{context}\n"
+            f"=== HẾT NGỮ CẢNH ===\n\n"
+            f"CÂU HỎI: {question}\n\n"
+            f"TRẢ LỜI (đầy đủ, chi tiết, dựa hoàn toàn vào nội dung trên):"
+        )
 
-                # Build history objects
-                history_objs = []
-                if history:
-                    try:
-                        from codex_oauth_module.models import ChatMessage # type: ignore
-                        for msg in history:
-                            history_objs.append(ChatMessage(role=msg["role"], content=msg["content"]))
-                    except Exception as e:
-                        print(f"Warning: could not parse history: {e}")
+        messages = []
+        # Giữ lịch sử hội thoại gần nhất (4 lượt = 8 messages)
+        if history:
+            messages.extend(history[-8:])
+        messages.append({"role": "user", "content": full_prompt})
 
-                # Gọi CodexOAuth.chat()
-                answer = codex.chat(
-                    message=full_prompt,
-                    model=model,
-                    history=history_objs,
-                    system_prompt=RAG_SYSTEM_PROMPT,
-                    reasoning_effort=CODEX_REASONING_EFFORT,
-                )
-                return answer
-            except Exception as e:
-                error_msg = str(e).lower()
-                # Nếu lỗi liên quan tới token, thử làm mới và retry
-                if "token" in error_msg and "expired" in error_msg and attempt < max_retries - 1:
-                    print(f"[WARN] Lan {attempt + 1}: Token het han, thu lam moi...")
-                    self._refresh_token_if_needed()
-                    continue
-                # Nếu không phải token, hoặc đã retry hết lần, ném lỗi
-                raise RuntimeError(f"[ERROR] Loi tu AI: {str(e)}")
+        print(f"[RAG Mode] {len(context_chunks)} chunks, {len(context):,} ký tự context...")
+        return self._call_llm(messages, timeout=600.0)
+
+    def chat_direct(self, prompt: str, system_prompt: str = "") -> str:
+        """Chat trực tiếp với LLM (dùng cho Tóm Tắt, Tạo Bài Tập)."""
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+        else:
+            full_prompt = prompt
+
+        # Không cắt content — để model xử lý tối đa có thể
+        full_prompt = self._safe_truncate(full_prompt, self._max_content_chars)
+
+        messages = [{"role": "user", "content": full_prompt}]
+        return self._call_llm(messages, timeout=600.0)
+
+    # ------------------------------------------------------------------
+    # Health Check
+    # ------------------------------------------------------------------
 
     def is_healthy(self) -> dict:
-        """Kiểm tra trạng thái kết nối."""
-        status = {"codex_connected": False, "rag_ready": False, "kb_loaded": False}
-        try:
-            codex = self._get_codex()
-            status["codex_connected"] = codex.is_authenticated
-        except Exception as e:
-            status["codex_error"] = str(e)
+        """Kiểm tra kết nối LM Studio và trạng thái RAG."""
+        status = {
+            "llm_connected": False,
+            "rag_ready": False,
+            "kb_loaded": False,
+            "kb_chunk_count": 0,
+            "model_name": self._model_name,
+            "api_base": self._llm_base_url,
+            "context_window_tokens": self._context_window_tokens,
+            "max_content_chars": self._max_content_chars,
+            "max_output_tokens": self._max_output_tokens,
+        }
 
-        status["rag_ready"] = self._rag is not None
-        status["kb_loaded"] = self._kb is not None
-        if self._kb:
-            status["kb_file_count"] = self._kb.file_count
-            status["kb_chunk_count"] = len(self._kb.documents)
+        try:
+            res = self._http_client.get(f"{self._llm_base_url}/models", timeout=5.0)
+            if res.status_code == 200:
+                status["llm_connected"] = True
+                status["codex_connected"] = True  # compat
+                models_data = res.json()
+                if models_data.get("data"):
+                    current_model = models_data["data"][0].get("id", self._model_name)
+                    # Nếu model đã thay đổi → cập nhật lại giới hạn
+                    if current_model != self._model_name:
+                        print(f"[INFO] Model đổi: {self._model_name} → {current_model}, cập nhật giới hạn...")
+                        self.refresh_context_limits()
+                    status["model_name"] = self._model_name
+                    status["context_window_tokens"] = self._context_window_tokens
+                    status["max_content_chars"] = self._max_content_chars
+        except Exception:
+            status["codex_connected"] = False
+
+        status["rag_ready"] = self._embedding_model is not None
+
+        try:
+            count = self._collection.count()
+
+            status["kb_loaded"] = count > 0
+            status["kb_chunk_count"] = count
+        except Exception:
+            pass
 
         return status
 
 
 # ============================================================
-# Singleton instance - dùng chung toàn bộ ứng dụng
+# Singleton
 # ============================================================
 _llm_service_instance: Optional[LLMService] = None
 
 
 def get_llm_service() -> LLMService:
-    """FastAPI dependency - trả về singleton LLMService."""
     global _llm_service_instance
     if _llm_service_instance is None:
         _llm_service_instance = LLMService()

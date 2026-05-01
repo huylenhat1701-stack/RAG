@@ -65,7 +65,7 @@ class MessageInfo(BaseModel):
 class AskRequest(BaseModel):
     """Schema nhận câu hỏi từ người dùng."""
     question: str = Field(..., min_length=3, max_length=2000, description="Câu hỏi của người dùng")
-    top_k: Optional[int] = Field(default=5, ge=1, le=20, description="Số lượng chunk tài liệu tìm kiếm")
+    top_k: Optional[int] = Field(default=15, ge=1, le=50, description="Số lượng chunk tài liệu tìm kiếm (chỉ dùng khi RAG mode)")
     history: Optional[List[MessageInfo]] = Field(default=[], description="Lịch sử trò chuyện")
     doc_ids: Optional[List[int]] = Field(default=None, description="Giới hạn tìm kiếm trong danh sách ID tài liệu (None = tất cả)")
 
@@ -105,6 +105,8 @@ class AskResponse(BaseModel):
     sources: List[SourceInfo]
     model_used: str
     history_id: int
+    mode: str = "rag"           # "full_context" | "rag" | "none"
+    context_chars: int = 0      # Số ký tự nội dung đã đưa vào LLM
 
 
 # ============================================================
