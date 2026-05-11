@@ -77,7 +77,7 @@ Lưu lại phiên hỏi đáp:
 
 ### 4.1 Upload và index tài liệu
 
-### Bước API
+#### Bước API
 Endpoint: `POST /api/v1/documents/upload`
 
 1. Kiểm tra extension hợp lệ: `.pdf`, `.txt`, `.docx`, `.md`
@@ -86,7 +86,7 @@ Endpoint: `POST /api/v1/documents/upload`
 4. Tạo bản ghi DB trạng thái `UPLOADED`
 5. Chạy background task `_process()` để xử lý index
 
-### Bước background xử lý
+#### Bước background xử lý
 Hàm: `process_and_index_document(...)`
 
 1. Update trạng thái `INDEXING`
@@ -126,25 +126,25 @@ Luồng:
 Endpoint: `POST /api/v1/chat/ask`
 Hàm điều phối: `answer_question(...)`
 
-### Bước 1: Xác định tập tài liệu được phép truy vấn
+#### Bước 1: Xác định tập tài liệu được phép truy vấn
 - Nếu user chọn `doc_ids` -> chỉ truy vấn trong danh sách đó
 - Nếu không chọn -> dùng tất cả doc trạng thái `INDEXED`
 
-### Bước 2: Thử ghép full content
+#### Bước 2: Thử ghép full content
 - Đọc toàn bộ nội dung từng tài liệu đã chọn
 - Nếu nhiều tài liệu, thêm header phân tách theo file
 - Tính tổng số ký tự `combined_content`
 
-### Bước 3: Quyết định thuật toán
+#### Bước 3: Quyết định thuật toán
 
-#### Mode A — `full_context`
+##### Mode A — `full_context`
 Điều kiện: tổng content <= `FULL_CONTEXT_THRESHOLD_CHARS`
 
 - Đưa **toàn bộ nội dung** vào prompt
 - Gọi `generate_answer_full_context`
 - Nguồn trích dẫn: tất cả file đã đưa vào context (score 1.0)
 
-#### Mode B — `rag`
+##### Mode B — `rag`
 Điều kiện: tài liệu quá dài
 
 - Vector search trong Chroma: `llm_service.search(question, top_k, allowed_filenames)`
@@ -152,7 +152,7 @@ Hàm điều phối: `answer_question(...)`
 - Gọi `generate_answer` với context là các chunk
 - Xây dựng danh sách nguồn từ chunk tìm được (kèm relevance score)
 
-### Bước 4: Lưu lịch sử
+#### Bước 4: Lưu lịch sử
 - Ghi `question`, `answer`, `sources`, `model_used` vào `chat_history`
 - Trả `mode` và `context_chars` để frontend hiển thị badge
 
@@ -212,11 +212,11 @@ Mục đích:
 
 ### 5.2 Thuật toán embedding + retrieval
 
-### Index
+#### Index
 1. Dùng model `SentenceTransformer` tạo embedding cho từng chunk
 2. Lưu vào Chroma collection cùng metadata `filename`
 
-### Search
+#### Search
 1. Embed query
 2. Query Chroma theo `top_k`
 3. Có thể lọc theo `allowed_filenames`
