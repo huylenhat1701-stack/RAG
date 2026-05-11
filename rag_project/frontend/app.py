@@ -34,6 +34,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api/v1")
 # ============================================================
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 /* ═══════════════════════════════════════════════════════════
    STREAMLIT THEME INJECTION
    Override Streamlit's built-in CSS variables so the default
@@ -46,23 +47,23 @@ st.markdown("""
     --primary-color:            #1e40af !important;
     --background-color:         #f5f4f1 !important;
     --secondary-background-color: #ffffff !important;
-    --text-color:               #111111 !important;
-    --font:                     system-ui, -apple-system, sans-serif !important;
+    --text-color:               #0d0d0d !important;
+    --font:                     'Inter', system-ui, -apple-system, sans-serif !important;
 }
 
 /* ── DESIGN TOKENS ──────────────────────────────────────── */
 :root {
-    --bg:          #f5f4f1;
+    --bg:          #f6f5f2;
     --surface:     #ffffff;
     --surface-alt: #f0ede8;
     --border:      #d6d3cc;
-    --border-mid:  #c4bfb8;
+    --border-mid:  #b8b4ac;
 
-    /* Text — higher contrast than before */
-    --tx1:  #111111;   /* headings, labels           */
-    --tx2:  #3d3b38;   /* body, secondary             */
-    --tx3:  #6b6762;   /* captions, meta              */
-    --tx4:  #9c9892;   /* placeholder, very muted     */
+    /* Text — maximum readability, pure black family */
+    --tx1:  #0d0d0d;   /* headings, labels — near-black  */
+    --tx2:  #1a1a1a;   /* body text — very dark          */
+    --tx3:  #4a4744;   /* captions, meta — medium dark   */
+    --tx4:  #7a7672;   /* placeholder, muted             */
 
     /* Accent — stable blue (not Streamlit red) */
     --ac:   #1e40af;
@@ -74,17 +75,19 @@ st.markdown("""
     --wn:   #78350f;  --wn-bg:   #fffbeb;  --wn-bd:  #fde68a;
     --er:   #7f1d1d;  --er-bg:   #fef2f2;  --er-bd:  #fecaca;
 
-    --r-sm: 5px;
-    --r:    9px;
-    --r-lg: 13px;
-    --sh-sm: 0 1px 2px rgba(0,0,0,0.07), 0 1px 1px rgba(0,0,0,0.04);
-    --sh:    0 3px 10px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05);
+    --r-sm: 6px;
+    --r:    10px;
+    --r-lg: 14px;
+    --sh-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    --sh:    0 4px 12px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
 }
 
 /* ── BASE & RESET ────────────────────────────────────────── */
 html, body, [class*="css"] {
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-    color: var(--tx2) !important;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+    color: #1a1a1a !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Headings and bold custom HTML use sharper color */
@@ -92,8 +95,9 @@ h1, h2, h3, h4, h5, h6,
 .page-header h1,
 .section-heading,
 .sidebar-title {
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-    color: var(--tx1) !important;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+    color: #0a0a0a !important;
+    font-weight: 700;
 }
 
 .main { background: var(--bg) !important; }
@@ -207,22 +211,24 @@ section[data-testid="stSidebar"] label {
 
 /* ── PAGE HEADER ─────────────────────────────────────────── */
 .page-header {
-    border-bottom: 1.5px solid var(--tx1);
-    padding-bottom: 0.85rem;
+    border-bottom: 2px solid #0d0d0d;
+    padding-bottom: 0.9rem;
     margin-bottom: 1.5rem;
 }
 .page-header h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--tx1) !important;
-    margin: 0 0 0.2rem;
-    letter-spacing: -0.02em;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #0a0a0a !important;
+    margin: 0 0 0.25rem;
+    letter-spacing: -0.03em;
+    font-family: 'Inter', sans-serif !important;
 }
 .page-header p {
-    font-size: 0.8rem;
-    color: var(--tx3) !important;
+    font-size: 0.82rem;
+    color: #4a4744 !important;
     margin: 0;
     font-style: italic;
+    font-weight: 400;
 }
 
 /* ── TABS ────────────────────────────────────────────────── */
@@ -266,21 +272,23 @@ section[data-testid="stSidebar"] label {
 
 /* ── SECTION TYPOGRAPHY ──────────────────────────────────── */
 .section-heading {
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 700;
-    color: var(--tx1) !important;
+    color: #0a0a0a !important;
     margin: 0 0 0.25rem;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    font-family: 'Inter', sans-serif !important;
 }
 .section-caption {
-    font-size: 0.76rem;
-    color: var(--tx3) !important;
+    font-size: 0.78rem;
+    color: #4a4744 !important;
     font-style: italic;
     margin-bottom: 1.1rem;
+    font-weight: 400;
 }
 .doc-selector-label {
     font-size: 0.7rem;
-    color: var(--tx3) !important;
+    color: #4a4744 !important;
     font-weight: 600;
     margin-bottom: 0.35rem;
     text-transform: uppercase;
@@ -365,61 +373,91 @@ section[data-testid="stSidebar"] label {
 
 /* ── CHAT MESSAGES ───────────────────────────────────────── */
 .chat-user-msg {
-    background: var(--ac-s);
-    border-left: 3px solid var(--ac);
-    padding: 0.8rem 1rem;
+    background: #eff6ff;
+    border-left: 3.5px solid #1e40af;
+    padding: 0.9rem 1.1rem;
     border-radius: 0 var(--r) var(--r) 0;
-    margin: 0.45rem 0;
-    color: var(--tx1) !important;
-    line-height: 1.75;
-    font-size: 0.88rem;
+    margin: 0.6rem 0;
+    color: #0d0d0d !important;
+    line-height: 1.8;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif !important;
+}
+.chat-user-msg strong {
+    color: #0a0a0a !important;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #1e40af !important;
 }
 .chat-ai-msg {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--border-mid);
-    padding: 0.8rem 1rem;
+    background: #ffffff;
+    border: 1px solid #d6d3cc;
+    border-left: 3.5px solid #1e40af;
+    padding: 0.9rem 1.1rem;
     border-radius: 0 var(--r) var(--r) 0;
-    margin: 0.45rem 0;
-    color: var(--tx1) !important;
-    line-height: 1.75;
-    font-size: 0.88rem;
-    box-shadow: var(--sh-sm);
+    margin: 0.6rem 0;
+    color: #0d0d0d !important;
+    line-height: 1.85;
+    font-size: 0.875rem;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: 0 2px 8px rgba(30,64,175,0.07), 0 1px 3px rgba(0,0,0,0.05);
+}
+.chat-ai-msg strong {
+    color: #0a0a0a !important;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #1e40af !important;
+}
+.chat-ai-msg br + * , .chat-ai-msg p {
+    color: #1a1a1a !important;
 }
 .source-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.2rem;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    color: var(--tx2) !important;
-    padding: 0.12rem 0.5rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af !important;
+    padding: 0.15rem 0.55rem;
     border-radius: 9999px;
     font-size: 0.68rem;
-    font-weight: 500;
+    font-weight: 600;
     margin: 0.1rem;
+    font-family: 'Inter', sans-serif !important;
 }
 
 /* ── SUMMARY / EXERCISE BOX ──────────────────────────────── */
 .summary-box {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 1.2rem 1.4rem;
-    line-height: 1.85;
-    color: var(--tx2) !important;
-    font-size: 0.88rem;
-    box-shadow: var(--sh-sm);
+    background: #ffffff;
+    border: 1px solid #d6d3cc;
+    border-left: 4px solid #1e40af;
+    border-radius: 0 var(--r-lg) var(--r-lg) 0;
+    padding: 1.3rem 1.5rem;
+    line-height: 1.9;
+    color: #1a1a1a !important;
+    font-size: 0.9rem;
+    font-family: 'Inter', sans-serif !important;
+    box-shadow: 0 2px 10px rgba(30,64,175,0.07), 0 1px 3px rgba(0,0,0,0.05);
 }
 .summary-box h4 {
-    color: var(--tx1) !important;
-    font-size: 0.75rem;
+    color: #1e40af !important;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin-bottom: 0.8rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.85rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid #e5e7eb;
+    font-family: 'Inter', sans-serif !important;
 }
 
 /* ── READER ──────────────────────────────────────────────── */
@@ -491,26 +529,31 @@ section[data-testid="stSidebar"] label {
     border-radius: var(--r-sm) !important;
     font-size: 0.8rem !important;
     font-weight: 600 !important;
+    font-family: 'Inter', sans-serif !important;
     background: var(--surface) !important;
-    color: var(--tx1) !important;
+    color: #0d0d0d !important;
     border: 1px solid var(--border-mid) !important;
-    padding: 0.35rem 0.85rem !important;
-    transition: all 0.12s ease !important;
-    box-shadow: none !important;
+    padding: 0.38rem 0.9rem !important;
+    transition: all 0.15s ease !important;
+    box-shadow: var(--sh-sm) !important;
+    letter-spacing: 0.01em !important;
 }
 .stButton > button:hover {
     background: var(--surface-alt) !important;
-    border-color: var(--tx3) !important;
-    color: var(--tx1) !important;
+    border-color: #1e40af !important;
+    color: #1e40af !important;
+    box-shadow: 0 0 0 2px #eff6ff !important;
 }
 .stButton > button[kind="primary"] {
-    background: var(--tx1) !important;
+    background: #1e40af !important;
     color: #ffffff !important;
-    border-color: var(--tx1) !important;
+    border-color: #1e40af !important;
+    box-shadow: 0 2px 8px rgba(30,64,175,0.25) !important;
 }
 .stButton > button[kind="primary"]:hover {
-    background: #2a2a27 !important;
-    border-color: #2a2a27 !important;
+    background: #1d3a9e !important;
+    border-color: #1d3a9e !important;
+    box-shadow: 0 3px 12px rgba(30,64,175,0.35) !important;
 }
 
 /* ── Download button ─────────────────────────────────────── */
@@ -533,15 +576,17 @@ section[data-testid="stSidebar"] label {
 [data-baseweb="input"] input,
 [data-baseweb="textarea"] textarea {
     background: var(--surface) !important;
-    color: var(--tx1) !important;
-    border: 1px solid var(--border-mid) !important;
+    color: #0d0d0d !important;
+    border: 1.5px solid var(--border-mid) !important;
     border-radius: var(--r-sm) !important;
-    font-size: 0.84rem !important;
+    font-size: 0.86rem !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 400 !important;
 }
 .stTextInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus {
-    border-color: var(--ac) !important;
-    box-shadow: 0 0 0 2px var(--ac-s) !important;
+    border-color: #1e40af !important;
+    box-shadow: 0 0 0 2.5px #eff6ff !important;
     outline: none !important;
 }
 
@@ -564,14 +609,22 @@ section[data-testid="stSidebar"] label {
 [data-testid="stChatInput"] textarea,
 .stChatInputContainer textarea {
     background: var(--surface) !important;
-    color: var(--tx1) !important;
-    border: 1px solid var(--border-mid) !important;
+    color: #0d0d0d !important;
+    border: 1.5px solid var(--border-mid) !important;
     border-radius: var(--r) !important;
-    font-size: 0.85rem !important;
+    font-size: 0.88rem !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 400 !important;
+}
+[data-testid="stChatInput"] textarea:focus,
+.stChatInputContainer textarea:focus {
+    border-color: #1e40af !important;
+    box-shadow: 0 0 0 2px #eff6ff !important;
 }
 .stChatInputContainer {
     background: var(--bg) !important;
     border-top: 1px solid var(--border) !important;
+    padding-top: 0.5rem !important;
 }
 
 /* ── File uploader — force light theme ───────────────────── */
