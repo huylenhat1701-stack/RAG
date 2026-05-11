@@ -5,6 +5,7 @@ Sinh viên: Lê Nhật Huy - B23DCAT126 | Phạm Hải Đông - B23DCVT090
 """
 
 import json
+import html as _html
 import os
 import time
 import requests
@@ -769,6 +770,234 @@ section[data-testid="stSidebar"] hr { border-color: var(--border) !important; }
     background: transparent !important;
     padding: 0.2rem 0 !important;
 }
+
+/* ══════════════════════════════════════════════════════════
+   QUIZ COMPETITION STYLES
+   ══════════════════════════════════════════════════════════ */
+.quiz-header {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+    border-radius: var(--r-lg);
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(30,64,175,0.3);
+}
+.quiz-header h2 {
+    color: #ffffff !important;
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.02em;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-header .quiz-meta {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.85);
+    margin-top: 0.2rem;
+}
+.quiz-score-badge {
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 9999px;
+    padding: 0.5rem 1.2rem;
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-align: center;
+    min-width: 100px;
+}
+.quiz-score-badge .score-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+    display: block;
+}
+.quiz-progress-bar {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 9999px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.quiz-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1e40af, #3b82f6);
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+}
+.quiz-question-card {
+    background: #ffffff;
+    border: 1.5px solid #d6d3cc;
+    border-radius: var(--r-lg);
+    padding: 1.8rem 2rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+}
+.quiz-question-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #1e40af;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 0.6rem;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-question-text {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #0a0a0a;
+    line-height: 1.65;
+    font-family: 'Inter', sans-serif !important;
+    margin: 0;
+}
+.quiz-option-btn {
+    width: 100%;
+    text-align: left;
+    background: #f8f9fa;
+    border: 2px solid #e5e7eb;
+    border-radius: var(--r);
+    padding: 0.85rem 1.1rem;
+    margin: 0.35rem 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #1a1a1a;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-option-btn:hover {
+    border-color: #1e40af;
+    background: #eff6ff;
+    color: #1e40af;
+}
+.quiz-option-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #4a4744;
+    font-size: 0.78rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+.quiz-opt-correct {
+    background: #f0fdf4 !important;
+    border-color: #22c55e !important;
+    color: #14532d !important;
+}
+.quiz-opt-correct .quiz-option-key {
+    background: #22c55e !important;
+    color: #ffffff !important;
+}
+.quiz-opt-wrong {
+    background: #fef2f2 !important;
+    border-color: #ef4444 !important;
+    color: #7f1d1d !important;
+}
+.quiz-opt-wrong .quiz-option-key {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+}
+.quiz-feedback-correct {
+    background: #f0fdf4;
+    border: 1.5px solid #86efac;
+    border-left: 4px solid #22c55e;
+    border-radius: 0 var(--r) var(--r) 0;
+    padding: 0.9rem 1.1rem;
+    color: #14532d;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin: 0.6rem 0;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-feedback-wrong {
+    background: #fef2f2;
+    border: 1.5px solid #fecaca;
+    border-left: 4px solid #ef4444;
+    border-radius: 0 var(--r) var(--r) 0;
+    padding: 0.9rem 1.1rem;
+    color: #7f1d1d;
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin: 0.6rem 0;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-explanation {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--r-sm);
+    padding: 0.7rem 0.9rem;
+    color: #78350f;
+    font-size: 0.82rem;
+    margin-top: 0.5rem;
+    font-style: italic;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-result-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1e40af 100%);
+    border-radius: var(--r-lg);
+    padding: 2.5rem 2rem;
+    text-align: center;
+    color: #ffffff;
+    box-shadow: 0 8px 32px rgba(30,64,175,0.35);
+    margin: 1rem 0;
+}
+.quiz-result-trophy { font-size: 3.5rem; margin-bottom: 0.75rem; display: block; }
+.quiz-result-score {
+    font-size: 3rem;
+    font-weight: 900;
+    color: #fbbf24;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-result-label {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.75);
+    margin-top: 0.3rem;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-result-grade {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 9999px;
+    padding: 0.4rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-top: 0.8rem;
+    font-family: 'Inter', sans-serif !important;
+}
+.quiz-stat-row {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1.2rem;
+}
+.quiz-stat-item { text-align: center; }
+.quiz-stat-num { font-size: 1.5rem; font-weight: 800; color: #ffffff; font-family: 'Inter', sans-serif !important; }
+.quiz-stat-lbl { font-size: 0.7rem; color: rgba(255,255,255,0.65); text-transform: uppercase; letter-spacing: 0.07em; }
+.quiz-review-item {
+    background: #ffffff;
+    border: 1px solid #d6d3cc;
+    border-radius: var(--r);
+    padding: 1rem 1.2rem;
+    margin: 0.5rem 0;
+    border-left: 4px solid #e5e7eb;
+}
+.quiz-review-item.correct { border-left-color: #22c55e; }
+.quiz-review-item.wrong   { border-left-color: #ef4444; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1210,78 +1439,284 @@ with tab_summary:
 
 
 # ============================================================
-# TAB 4: Tạo Bài Tập
+# TAB 4: Thi Trắc Nghiệm (Quiz Competition)
 # ============================================================
 with tab_exercise:
-    st.markdown('<p class="section-heading">Tạo Bài Tập Từ Giáo Trình</p>', unsafe_allow_html=True)
-    st.markdown('<p class="section-caption">AI tạo câu hỏi trắc nghiệm, tự luận hoặc thảo luận dựa trên tài liệu đã upload.</p>', unsafe_allow_html=True)
 
-    docs_data, err = api_get("/documents")
-    if err:
-        st.error(err)
-    elif not docs_data or docs_data["total"] == 0:
-        st.markdown("""
-        <div class="empty-state">
-            <h3>Chưa có tài liệu để tạo bài tập</h3>
-            <p>Upload tài liệu trước ở tab "Tài Liệu".</p>
+    # ── Session state cho quiz ───────────────────────────────
+    for _k, _v in {
+        "quiz_questions": [],      # Danh sách câu hỏi
+        "quiz_index": 0,           # Câu đang thi
+        "quiz_score": 0,           # Số câu đúng
+        "quiz_answered": {},       # {idx: "A"/"B"/"C"/"D"}
+        "quiz_phase": "setup",     # "setup" | "playing" | "result"
+        "quiz_doc_name": "",
+        "quiz_model": "",
+    }.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # ── Lấy dữ liệu tài liệu ─────────────────────────────────
+    qz_docs_data, qz_err = api_get("/documents")
+    qz_indexed = []
+    if qz_docs_data and qz_docs_data.get("documents"):
+        qz_indexed = [d for d in qz_docs_data["documents"] if d["status"] == "INDEXED"]
+
+    # ════════════════════════════════════════════════════════
+    # PHASE 1: SETUP — chọn tài liệu, số câu, bắt đầu thi
+    # ════════════════════════════════════════════════════════
+    if st.session_state.quiz_phase == "setup":
+        st.markdown('<p class="section-heading">🏆 Thi Trắc Nghiệm</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-caption">AI tạo bộ câu hỏi từ tài liệu — trả lời từng câu, xem điểm số ngay.</p>', unsafe_allow_html=True)
+
+        if qz_err:
+            st.error(qz_err)
+        elif not qz_indexed:
+            st.markdown("""
+            <div class="empty-state">
+                <h3>Chưa có tài liệu để thi</h3>
+                <p>Upload và index tài liệu ở tab "Tài Liệu" trước.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            qz_doc_opts = {d["file_name"]: d["id"] for d in qz_indexed}
+
+            col_sel, col_num = st.columns([3, 1])
+            with col_sel:
+                qz_selected = st.selectbox("📄 Chọn tài liệu để thi", list(qz_doc_opts.keys()), key="qz_doc_sel")
+            with col_num:
+                qz_count = st.slider("Số câu", 3, 20, 10, key="qz_count")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if st.button("🚀 Bắt Đầu Thi", type="primary", use_container_width=True):
+                doc_id = qz_doc_opts[qz_selected]
+                with st.spinner(f"🤖 AI đang tạo {qz_count} câu hỏi từ tài liệu... (30–60 giây)"):
+                    result, err = api_post(f"/documents/{doc_id}/quiz", json_data={"count": qz_count})
+                if err:
+                    st.error(f"Lỗi tạo quiz: {err}")
+                elif result and result.get("questions"):
+                    st.session_state.quiz_questions = result["questions"]
+                    st.session_state.quiz_index = 0
+                    st.session_state.quiz_score = 0
+                    st.session_state.quiz_answered = {}
+                    st.session_state.quiz_phase = "playing"
+                    st.session_state.quiz_doc_name = result.get("file_name", qz_selected)
+                    st.session_state.quiz_model = result.get("model_used", "")
+                    st.rerun()
+                else:
+                    st.error("Không tạo được câu hỏi. Hãy thử lại.")
+
+    # ════════════════════════════════════════════════════════
+    # PHASE 2: PLAYING — hiển thị từng câu hỏi
+    # ════════════════════════════════════════════════════════
+    elif st.session_state.quiz_phase == "playing":
+        qs   = st.session_state.quiz_questions
+        idx  = st.session_state.quiz_index
+        total = len(qs)
+        score = st.session_state.quiz_score
+        pct   = int((idx / total) * 100) if total else 0
+
+        # Header + Score
+        st.markdown(f"""
+        <div class="quiz-header">
+            <div>
+                <h2>🏆 Đang Thi</h2>
+                <div class="quiz-meta">📄 {st.session_state.quiz_doc_name} &nbsp;·&nbsp; Câu {idx+1}/{total}</div>
+            </div>
+            <div class="quiz-score-badge">
+                <span class="score-label">Điểm</span>
+                {score}/{idx}
+            </div>
+        </div>
+        <div class="quiz-progress-bar">
+            <div class="quiz-progress-fill" style="width:{pct}%"></div>
         </div>
         """, unsafe_allow_html=True)
-    else:
-        docs = docs_data["documents"]
-        indexed_docs = [d for d in docs if d["status"] == "INDEXED"]
 
-        if not indexed_docs:
-            st.warning("Chưa có tài liệu nào được index xong. Vui lòng chờ xử lý hoàn tất.")
+        q = qs[idx]
+        q_id   = q.get("id", idx + 1)
+        q_text = q.get("question", "")
+        opts   = q.get("options", {})
+        correct = q.get("answer", "A")
+        expl   = q.get("explanation", "")
+
+        already_answered = idx in st.session_state.quiz_answered
+
+        # Card câu hỏi — escape text từ AI
+        safe_q_text = _html.escape(str(q_text))
+        st.markdown(f"""
+        <div class="quiz-question-card">
+            <div class="quiz-question-num">Câu {idx + 1} / {total}</div>
+            <p class="quiz-question-text">{safe_q_text}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Nút đáp án A/B/C/D
+        if not already_answered:
+            col1, col2 = st.columns(2)
+            cols = [col1, col2, col1, col2]
+            for i, key in enumerate(["A", "B", "C", "D"]):
+                text = opts.get(key, "")
+                with cols[i]:
+                    if st.button(
+                        f"{key}. {text}",
+                        key=f"qz_opt_{idx}_{key}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.quiz_answered[idx] = key
+                        if key == correct:
+                            st.session_state.quiz_score += 1
+                        st.rerun()
         else:
-            doc_options = {
-                f"{d['file_name']}": d['id']
-                for d in indexed_docs
-            }
-            selected_doc = st.selectbox(
-                "Chọn tài liệu để tạo bài tập",
-                options=list(doc_options.keys()),
-                index=0,
-                key="exercise_doc_select"
-            )
-            exercise_type = st.radio(
-                "Dạng bài tập",
-                options=["trắc nghiệm", "tự luận", "thảo luận"],
-                horizontal=True,
-            )
-            num_questions = st.slider(
-                "Số lượng câu hỏi",
-                min_value=1,
-                max_value=20,
-                value=5,
-            )
-
-            if st.button("Tạo bài tập", type="primary"):
-                doc_id = doc_options[selected_doc]
-                with st.spinner("AI đang tạo bài tập... (15–30 giây)"):
-                    result, err = api_post(
-                        f"/documents/{doc_id}/exercise",
-                        json_data={"exercise_type": exercise_type, "count": num_questions},
-                    )
-                if err:
-                    st.error(err)
-                elif result:
+            # Đã trả lời — hiển thị kết quả
+            chosen = st.session_state.quiz_answered[idx]
+            col1, col2 = st.columns(2)
+            cols = [col1, col2, col1, col2]
+            for i, key in enumerate(["A", "B", "C", "D"]):
+                text = opts.get(key, "")
+                if key == correct:
+                    css = "quiz-opt-correct"
+                elif key == chosen and key != correct:
+                    css = "quiz-opt-wrong"
+                else:
+                    css = ""
+                with cols[i]:
+                    safe_text = _html.escape(str(text))
                     st.markdown(f"""
-                    <div class="summary-box">
-                        <h4>Bài tập — {exercise_type.title()}</h4>
-                        {result['exercise_text'].replace(chr(10), '<br>')}
+                    <div class="quiz-option-btn {css}">
+                        <span class="quiz-option-key">{key}</span>
+                        {safe_text}
                     </div>
                     """, unsafe_allow_html=True)
-                    st.caption(f"Model: `{result.get('model_used', 'N/A')}`")
-                    st.download_button(
-                        "Tải bài tập",
-                        data=result['exercise_text'],
-                        file_name=f"{result['file_name']}_baitap.txt",
-                        mime="text/plain",
-                    )
+
+            # Phản hồi
+            if chosen == correct:
+                st.markdown(f'<div class="quiz-feedback-correct">✅ <strong>Chính xác!</strong> Bạn đã chọn đúng đáp án <strong>{correct}</strong>.</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="quiz-feedback-wrong">❌ <strong>Sai rồi!</strong> Bạn chọn <strong>{chosen}</strong>, đáp án đúng là <strong>{correct}</strong>.</div>', unsafe_allow_html=True)
+
+            if expl:
+                safe_expl = _html.escape(str(expl))
+                st.markdown(f'<div class="quiz-explanation">💡 {safe_expl}</div>', unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Nút điều hướng
+            nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+            with nav_col1:
+                if idx > 0:
+                    if st.button("← Câu trước", key="qz_prev"):
+                        st.session_state.quiz_index -= 1
+                        st.rerun()
+            with nav_col3:
+                if idx < total - 1:
+                    if st.button("Câu tiếp →", key="qz_next", type="primary"):
+                        st.session_state.quiz_index += 1
+                        st.rerun()
+                else:
+                    if st.button("🏁 Xem Kết Quả", key="qz_finish", type="primary"):
+                        st.session_state.quiz_phase = "result"
+                        st.rerun()
+
+    # ════════════════════════════════════════════════════════
+    # PHASE 3: RESULT — bảng kết quả cuối
+    # ════════════════════════════════════════════════════════
+    elif st.session_state.quiz_phase == "result":
+        qs      = st.session_state.quiz_questions
+        total   = len(qs)
+        score   = st.session_state.quiz_score
+        wrong   = total - score
+        pct_val = int((score / total) * 100) if total else 0
+
+        if pct_val >= 90:
+            trophy, grade = "🏆", "Xuất Sắc"
+        elif pct_val >= 75:
+            trophy, grade = "🥇", "Giỏi"
+        elif pct_val >= 55:
+            trophy, grade = "🥈", "Khá"
+        else:
+            trophy, grade = "🥉", "Cần Cố Gắng"
+
+        st.markdown(f"""
+        <div class="quiz-result-card">
+            <span class="quiz-result-trophy">{trophy}</span>
+            <div class="quiz-result-score">{pct_val}%</div>
+            <div class="quiz-result-label">{score} đúng / {total} câu &nbsp;·&nbsp; {st.session_state.quiz_doc_name}</div>
+            <div class="quiz-result-grade">{grade}</div>
+            <div class="quiz-stat-row">
+                <div class="quiz-stat-item">
+                    <div class="quiz-stat-num">{score}</div>
+                    <div class="quiz-stat-lbl">✅ Đúng</div>
+                </div>
+                <div class="quiz-stat-item">
+                    <div class="quiz-stat-num">{wrong}</div>
+                    <div class="quiz-stat-lbl">❌ Sai</div>
+                </div>
+                <div class="quiz-stat-item">
+                    <div class="quiz-stat-num">{total}</div>
+                    <div class="quiz-stat-lbl">📝 Tổng</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Nút hành động
+        btn1, btn2, btn3 = st.columns(3)
+        with btn1:
+            if st.button("🔁 Thi Lại", use_container_width=True):
+                st.session_state.quiz_phase = "setup"
+                st.session_state.quiz_questions = []
+                st.session_state.quiz_answered = {}
+                st.session_state.quiz_score = 0
+                st.session_state.quiz_index = 0
+                st.rerun()
+        with btn2:
+            if st.button("📋 Xem Lại Đáp Án", use_container_width=True):
+                st.session_state["show_review"] = not st.session_state.get("show_review", False)
+                st.rerun()
+        with btn3:
+            if st.button("🏠 Về Trang Chủ", use_container_width=True):
+                st.session_state.quiz_phase = "setup"
+                st.rerun()
+
+        # Phần xem lại đáp án
+        if st.session_state.get("show_review", False):
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<p class="section-heading">📋 Chi Tiết Từng Câu</p>', unsafe_allow_html=True)
+            answered = st.session_state.quiz_answered
+
+            for i, q in enumerate(qs):
+                chosen  = answered.get(i, "—")
+                correct = q.get("answer", "A")
+                is_ok   = chosen == correct
+                opts    = q.get("options", {})
+                css     = "correct" if is_ok else "wrong"
+                icon    = "✅" if is_ok else "❌"
+                chosen_text = opts.get(chosen, chosen)
+                correct_text = opts.get(correct, correct)
+
+                safe_q    = _html.escape(str(q.get('question', '')))
+                safe_ct   = _html.escape(str(chosen_text))
+                safe_crt  = _html.escape(str(correct_text))
+                safe_expl = _html.escape(str(q.get('explanation', '')))
+
+                wrong_part = f" &nbsp;·&nbsp; Đáp án đúng: <strong>{correct}. {safe_crt}</strong>" if not is_ok else ""
+                expl_part  = f"<br><small style='color:#78350f;font-style:italic'>💡 {safe_expl}</small>" if safe_expl else ""
+
+                st.markdown(f"""
+                <div class="quiz-review-item {css}">
+                    <strong>{icon} Câu {i+1}:</strong> {safe_q}<br>
+                    <small>Bạn chọn: <strong>{chosen}. {safe_ct}</strong>{wrong_part}</small>
+                    {expl_part}
+                </div>
+                """, unsafe_allow_html=True)
+
 
 
 # ============================================================
 # TAB 5: Hỏi & Đáp
+
 # ============================================================
 with tab_chat:
     st.markdown('<p class="section-heading">Hỏi & Đáp</p>', unsafe_allow_html=True)

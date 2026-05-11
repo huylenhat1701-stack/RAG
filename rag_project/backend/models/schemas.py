@@ -92,6 +92,29 @@ class ExerciseResponse(BaseModel):
     model_used: str
 
 
+class QuizQuestion(BaseModel):
+    """Một câu hỏi trắc nghiệm có cấu trúc."""
+    id: int
+    question: str
+    options: dict          # {"A": "...", "B": "...", "C": "...", "D": "..."}
+    answer: str            # "A" | "B" | "C" | "D"
+    explanation: str = ""  # Giải thích tại sao đáp án đúng
+
+
+class QuizResponse(BaseModel):
+    """Schema trả về bộ câu hỏi thi trắc nghiệm có cấu trúc."""
+    id: int
+    file_name: str
+    questions: List[QuizQuestion]
+    total: int
+    model_used: str
+
+
+class QuizRequest(BaseModel):
+    """Schema nhận yêu cầu tạo quiz trắc nghiệm."""
+    count: Optional[int] = Field(default=10, ge=3, le=30, description="Số câu hỏi")
+
+
 class SourceInfo(BaseModel):
     """Thông tin nguồn tài liệu tham chiếu."""
     file_name: str

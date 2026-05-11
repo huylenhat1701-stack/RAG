@@ -28,12 +28,13 @@ from ..services.document_service import (
     process_and_index_document,
     get_document_content,
 )
-from ..services.rag_service import answer_question, summarize_document, generate_exercise
+from ..services.rag_service import answer_question, summarize_document, generate_exercise, generate_quiz
 from ..models.schemas import (
     DocumentResponse, DocumentListResponse,
     DocumentContentResponse, DocumentSummaryResponse,
     AskRequest, AskResponse,
     ExerciseRequest, ExerciseResponse,
+    QuizRequest, QuizResponse,
     ChatHistoryResponse, ChatHistoryListResponse,
     MessageResponse,
 )
@@ -258,6 +259,32 @@ def create_exercise(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo bài tập: {str(e)}")
+
+
+@router.post(
+    "/documents/{doc_id}/quiz",
+    response_model=QuizResponse,
+    summary="Tạo bộ câu hỏi thi trắc nghiệm có cấu trúc",
+    tags=["Tài liệu"],
+)
+def create_quiz(
+    doc_id: int,
+    request: QuizRequest,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """Tạo bộ câu hỏi thi trắc nghiệm tương tác từ tài liệu."""
+    try:
+        return generate_quiz(
+            doc_id=doc_id,
+            count=request.count or 10,
+            db=db,
+            llm_service=llm_service,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo quiz: {str(e)}")
 
 
 # ============================================================
