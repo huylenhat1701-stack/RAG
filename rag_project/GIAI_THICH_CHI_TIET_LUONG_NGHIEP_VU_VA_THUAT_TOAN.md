@@ -75,7 +75,7 @@ Lưu lại phiên hỏi đáp:
 
 ## 4) Luồng nghiệp vụ chi tiết
 
-## 4.1 Upload và index tài liệu
+### 4.1 Upload và index tài liệu
 
 ### Bước API
 Endpoint: `POST /api/v1/documents/upload`
@@ -103,7 +103,7 @@ Hàm: `process_and_index_document(...)`
 
 ---
 
-## 4.2 Đọc nội dung tài liệu
+### 4.2 Đọc nội dung tài liệu
 
 Endpoint: `GET /api/v1/documents/{id}/content`
 
@@ -121,7 +121,7 @@ Luồng:
 
 ---
 
-## 4.3 Hỏi đáp tài liệu (Q&A) với cơ chế chọn mode
+### 4.3 Hỏi đáp tài liệu (Q&A) với cơ chế chọn mode
 
 Endpoint: `POST /api/v1/chat/ask`
 Hàm điều phối: `answer_question(...)`
@@ -158,7 +158,7 @@ Hàm điều phối: `answer_question(...)`
 
 ---
 
-## 4.4 Tóm tắt tài liệu
+### 4.4 Tóm tắt tài liệu
 
 Endpoint: `POST /api/v1/documents/{id}/summarize`
 Hàm: `summarize_document(...)`
@@ -179,7 +179,7 @@ Luồng:
 
 ---
 
-## 4.5 Tạo bài tập từ tài liệu
+### 4.5 Tạo bài tập từ tài liệu
 
 Endpoint: `POST /api/v1/documents/{id}/exercise`
 Hàm: `generate_exercise(...)`
@@ -195,7 +195,7 @@ Luồng:
 
 ## 5) Thuật toán cốt lõi
 
-## 5.1 Thuật toán chunking văn bản
+### 5.1 Thuật toán chunking văn bản
 
 Hàm: `_chunk_text(text, filename)`
 
@@ -210,7 +210,7 @@ Mục đích:
 - Giữ ngữ cảnh liên tục giữa các chunk nhờ overlap
 - Tối ưu truy xuất khi tìm đoạn liên quan
 
-## 5.2 Thuật toán embedding + retrieval
+### 5.2 Thuật toán embedding + retrieval
 
 ### Index
 1. Dùng model `SentenceTransformer` tạo embedding cho từng chunk
@@ -225,7 +225,7 @@ Mục đích:
 
 Kết quả: danh sách `SearchResult(chunk, score)`
 
-## 5.3 Thuật toán chọn Full-Context vs RAG
+### 5.3 Thuật toán chọn Full-Context vs RAG
 
 Đây là điểm chính của project:
 
@@ -292,4 +292,3 @@ Project được thiết kế theo hướng:
 - Kết hợp **Full-Context** và **RAG retrieval** linh hoạt
 - Dễ mở rộng cho các nghiệp vụ học tập (tóm tắt, bài tập, hỏi đáp)
 - Tối ưu trải nghiệm người dùng với xử lý nền, cache summary, và lịch sử hội thoại
-
