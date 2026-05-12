@@ -1,294 +1,155 @@
-# Giải thích chi tiết luồng nghiệp vụ và thuật toán của project RAG
+# Giải Thích Chi Tiết Luồng Nghiệp Vụ & Thuật Toán - Smart Document Reader
 
-Tài liệu này mô tả **đúng theo code hiện tại** của project `rag_project` (FastAPI + Streamlit + SQLite + ChromaDB + Local LLM).
-
----
-
-## 1) Mục tiêu nghiệp vụ
-
-Hệ thống giải quyết 4 nghiệp vụ chính:
-
-1. **Quản lý tài liệu**: upload, lưu trữ, theo dõi trạng thái xử lý, xóa, tải lại file.
-2. **Đọc nội dung tài liệu**: trích xuất text từ PDF/DOCX/TXT/MD và hiển thị.
-3. **Hỏi đáp thông minh (RAG)**: trả lời dựa trên nội dung tài liệu đã nạp.
-4. **Tóm tắt và tạo bài tập**: sinh nội dung học tập từ tài liệu.
+Tài liệu này cung cấp cái nhìn chuyên sâu và **chính xác nhất** về cách hệ thống hoạt động, bao gồm kiến trúc, sơ đồ luồng dữ liệu (Data Flow) và các thuật toán cốt lõi đã được hiện thực trong source code của `rag_project`.
 
 ---
 
-## 2) Kiến trúc xử lý tổng quan
+## 1. Tổng Quan Kiến Trúc (Architecture Overview)
 
-Luồng kiến trúc theo lớp:
+Hệ thống được thiết kế theo mô hình **Client-Server** với sự tách biệt rõ ràng giữa các tầng:
 
-`Frontend (Streamlit) -> API (FastAPI routes) -> Services (nghiệp vụ) -> Repositories (DB) -> SQLite/ChromaDB/FileSystem`
-
-### Thành phần chính
-
-- **Frontend**: `frontend/app.py`
-  - Gọi API backend qua HTTP (`/api/v1/...`)
-  - Chia tab theo nghiệp vụ: Tài Liệu, Đọc, Tóm Tắt, Bài Tập, Hỏi & Đáp, Lịch Sử
-
-- **Backend API**: `backend/api/routes.py`
-  - Nhận request, validate đầu vào, gọi service, trả response
-
-- **Service layer**
-  - `document_service.py`: lưu file, trích text, tạo file `.extracted.txt`, index Chroma
-  - `rag_service.py`: điều phối Q&A, summarize, generate exercise
-  - `llm_service.py`: quản lý LLM local + embedding + truy xuất ChromaDB + generate
-
-- **Repository layer**
-  - `document_repo.py`: CRUD bảng `documents`
-  - `history_repo.py`: CRUD bảng `chat_history`
-
-- **Data stores**
-  - **SQLite**: metadata tài liệu + lịch sử hỏi đáp
-  - **ChromaDB**: lưu vector embedding các chunk
-  - **Filesystem**: file upload gốc + file text trích xuất
+*   **Frontend (Streamlit):** Xử lý giao diện người dùng, quản lý state và gọi API. Gồm các tab: Quản Lý Tài Liệu, Đọc Tài Liệu, Tóm Tắt, Bài Tập, Hỏi & Đáp.
+*   **Backend (FastAPI):** Expose các endpoints RESTful API (`/api/v1/...`). Quản lý routing và validate dữ liệu.
+*   **Service Layer:** Chứa logic nghiệp vụ cốt lõi:
+    *   `document_service.py`: Trích xuất văn bản, chunking, indexing.
+    *   `rag_service.py`: Điều phối luồng Hỏi đáp, Tóm tắt, Sinh bài tập/Quiz.
+    *   `llm_service.py`: Tương tác với Local LLM, nhúng (Embedding) và truy xuất Vector.
+*   **Repository Layer:** Trừu tượng hóa thao tác CRUD với Database (`document_repo.py`, `history_repo.py`).
+*   **Data Stores:**
+    *   **SQLite (`rag.db`):** Lưu trữ metadata tài liệu, lịch sử hội thoại, cache tóm tắt.
+    *   **ChromaDB:** Cơ sở dữ liệu Vector (Persistent) lưu trữ các chunk văn bản và vector embeddings.
+    *   **File System:** Lưu file gốc (PDF/DOCX/TXT) và file text đã trích xuất (`.extracted.txt`).
 
 ---
 
-## 3) Mô hình dữ liệu nghiệp vụ
+## 2. Luồng Nghiệp Vụ Chi Tiết & Thuật Toán
 
-### Bảng `documents`
+### 2.1. Quản lý, Trích xuất và Indexing Tài Liệu
 
-Theo dõi vòng đời mỗi tài liệu:
-- `UPLOADED`: đã nhận file
-- `INDEXING`: đang xử lý/trích xuất/chunk/embed
-- `INDEXED`: đã sẵn sàng cho tìm kiếm RAG
-- `ERROR`: xử lý lỗi, có `error_message`
+Luồng này xử lý việc đưa tài liệu thô vào hệ thống để AI có thể hiểu được. Việc trích xuất và indexing được chạy ngầm (background) để không block giao diện người dùng.
 
-Thông tin quan trọng:
-- `file_name`, `file_path`, `file_type`, `file_size`
-- `chunk_count`
-- `content_preview` (500 ký tự đầu)
-- `page_count`
-- `summary` (cache tóm tắt đã sinh)
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as FastAPI (routes.py)
+    participant BG as Background Task
+    participant DocSvc as Document Service
+    participant LLMSvc as LLM Service
+    participant Chroma as ChromaDB
+    participant DB as SQLite
 
-### Bảng `chat_history`
+    User->>API: Upload File (PDF/DOCX/TXT)
+    API->>API: Validate file (size < 50MB, extension)
+    API->>DB: Tạo bản ghi (Status: UPLOADED)
+    API-->>User: Trả về thông tin Doc ban đầu
+    API->>BG: Trigger process_and_index_document()
+    
+    activate BG
+    BG->>DB: Update Status -> INDEXING
+    BG->>DocSvc: extract_document_text()
+    Note over DocSvc: Dùng PyMuPDF (PDF)<br/>python-docx (DOCX)
+    DocSvc->>DocSvc: Sanitize Text (Xóa NUL bytes)
+    BG->>DB: Lưu content_preview & page_count
+    BG->>DocSvc: Tạo file .extracted.txt
+    
+    BG->>LLMSvc: load_files_into_kb()
+    LLMSvc->>LLMSvc: Chunking (Size: 600 từ, Overlap: 80 từ)
+    LLMSvc->>LLMSvc: Embedding (SentenceTransformer)
+    LLMSvc->>Chroma: Lưu Vectors & Metadata
+    
+    BG->>DB: Update Status -> INDEXED & chunk_count
+    deactivate BG
+```
 
-Lưu lại phiên hỏi đáp:
-- `question`, `answer`
-- `sources_json` (danh sách file nguồn)
-- `model_used`
-- `created_at`
-
----
-
-## 4) Luồng nghiệp vụ chi tiết
-
-### 4.1 Upload và index tài liệu
-
-#### Bước API
-Endpoint: `POST /api/v1/documents/upload`
-
-1. Kiểm tra extension hợp lệ: `.pdf`, `.txt`, `.docx`, `.md`
-2. Lưu file vào `UPLOAD_DIR`
-3. Kiểm tra kích thước <= 50MB
-4. Tạo bản ghi DB trạng thái `UPLOADED`
-5. Chạy background task `_process()` để xử lý index
-
-#### Bước background xử lý
-Hàm: `process_and_index_document(...)`
-
-1. Update trạng thái `INDEXING`
-2. Trích xuất text theo loại file:
-   - PDF: PyMuPDF
-   - DOCX: python-docx
-   - TXT/MD: đọc text trực tiếp
-3. Làm sạch text (xóa ký tự `NUL`) để tránh lỗi SQLite/Chroma
-4. Lưu `content_preview` + `page_count`
-5. Nếu PDF/DOCX -> tạo thêm file `.extracted.txt`
-6. Chunk + embedding + add vào Chroma collection
-7. Update trạng thái `INDEXED`, lưu `chunk_count`
-8. Nếu lỗi -> chuyển `ERROR`, lưu `error_message`
+**Thuật toán Chunking:**
+*   Hệ thống dùng thuật toán cửa sổ trượt (Sliding Window) cắt văn bản theo số từ.
+*   `CHUNK_SIZE = 600`, `CHUNK_OVERLAP = 80`. Bước nhảy (Step) là 520 từ.
+*   Việc có `Overlap` giúp bảo toàn ngữ nghĩa (context) giữa 2 chunk liền kề, tránh việc AI bị mất thông tin khi một đoạn văn quan trọng vô tình bị cắt làm đôi.
 
 ---
 
-### 4.2 Đọc nội dung tài liệu
+### 2.2. Thuật toán Hỏi & Đáp (Q&A) Cơ chế Kép (Full-Context & RAG)
 
-Endpoint: `GET /api/v1/documents/{id}/content`
+Đây là tính năng thông minh cốt lõi của hệ thống, tự động phân tích độ lớn dữ liệu để chọn chiến lược tối ưu nhất.
 
-Luồng:
-1. Tìm doc theo `id`
-2. Ưu tiên đọc file `.extracted.txt` nếu có
-3. Nếu chưa có thì trích xuất từ file gốc
-4. Trả về:
-   - `content`
-   - `word_count`
-   - `char_count`
-   - `page_count`
+```mermaid
+flowchart TD
+    Start[User đặt câu hỏi & chọn tài liệu] --> A{Có chọn tài liệu cụ thể?}
+    A -- Có --> B[Lọc theo doc_ids được chọn]
+    A -- Không --> C[Lấy tất cả tài liệu INDEXED]
+    
+    B --> D[Đọc toàn bộ nội dung file .extracted.txt]
+    C --> D
+    
+    D --> E{Tổng độ dài ký tự <= FULL_CONTEXT_THRESHOLD?}
+    
+    E -- Thỏa mãn (Tài liệu nhỏ) --> F[Mode: FULL-CONTEXT]
+    F --> F1[Đưa 100% nội dung vào Prompt]
+    F1 --> F2[LLM sinh câu trả lời chính xác nhất]
+    F2 --> End[Lưu Lịch sử. Trả kết quả + Nguồn: File đã chọn]
+    
+    E -- Vượt mức (Tài liệu lớn) --> G[Mode: RAG]
+    G --> G1[Embedding vector cho câu hỏi]
+    G1 --> G2[Vector Search trên ChromaDB lấy Top K chunks]
+    G2 --> G3[Ghép K chunks thành Ngữ cảnh (Context)]
+    G3 --> G4[Đưa Context vào Prompt, LLM sinh câu trả lời]
+    G4 --> End[Lưu Lịch sử. Trả kết quả + Nguồn: Các Chunks khớp]
+```
 
-Ý nghĩa nghiệp vụ: người dùng có thể đọc nội dung sạch đã chuẩn hóa mà không phụ thuộc định dạng ban đầu.
-
----
-
-### 4.3 Hỏi đáp tài liệu (Q&A) với cơ chế chọn mode
-
-Endpoint: `POST /api/v1/chat/ask`
-Hàm điều phối: `answer_question(...)`
-
-#### Bước 1: Xác định tập tài liệu được phép truy vấn
-- Nếu user chọn `doc_ids` -> chỉ truy vấn trong danh sách đó
-- Nếu không chọn -> dùng tất cả doc trạng thái `INDEXED`
-
-#### Bước 2: Thử ghép full content
-- Đọc toàn bộ nội dung từng tài liệu đã chọn
-- Nếu nhiều tài liệu, thêm header phân tách theo file
-- Tính tổng số ký tự `combined_content`
-
-#### Bước 3: Quyết định thuật toán
-
-##### Mode A — `full_context`
-Điều kiện: tổng content <= `FULL_CONTEXT_THRESHOLD_CHARS`
-
-- Đưa **toàn bộ nội dung** vào prompt
-- Gọi `generate_answer_full_context`
-- Nguồn trích dẫn: tất cả file đã đưa vào context (score 1.0)
-
-##### Mode B — `rag`
-Điều kiện: tài liệu quá dài
-
-- Vector search trong Chroma: `llm_service.search(question, top_k, allowed_filenames)`
-- Lấy danh sách chunk liên quan nhất
-- Gọi `generate_answer` với context là các chunk
-- Xây dựng danh sách nguồn từ chunk tìm được (kèm relevance score)
-
-#### Bước 4: Lưu lịch sử
-- Ghi `question`, `answer`, `sources`, `model_used` vào `chat_history`
-- Trả `mode` và `context_chars` để frontend hiển thị badge
+**Phân tích chiến lược:**
+1.  **Full-Context Mode:** Khi lượng từ đủ nhỏ để nhét vừa Context Window của LLM, hệ thống gửi toàn bộ văn bản. Đảm bảo độ chính xác tuyệt đối 100%, tránh hiện tượng RAG bỏ sót thông tin do thuật toán tìm kiếm vector (similarity search) bị trượt.
+2.  **RAG Mode (Retrieval-Augmented Generation):** Khi tài liệu quá dài. Hệ thống tự động giới hạn ngữ cảnh bằng Semantic Search. Tính toán khoảng cách vector (Similarity Score) để lấy ra những đoạn trích xuất liên quan nhất, giúp AI không bị quá tải.
 
 ---
 
-### 4.4 Tóm tắt tài liệu
+### 2.3. Tóm tắt Tài Liệu Lớn (Large Document Summarization)
 
-Endpoint: `POST /api/v1/documents/{id}/summarize`
-Hàm: `summarize_document(...)`
+Mô hình ngôn ngữ có giới hạn đầu vào (Context Window). Để tóm tắt một file PDF hàng chục trang, hệ thống sử dụng kỹ thuật **Map-Reduce** tùy chỉnh:
 
-Luồng:
-1. Lấy tài liệu theo ID
-2. Nếu đã có `summary` trong DB -> trả cache ngay
-3. Lấy content tài liệu
-4. Nếu content <= `LLM_MAX_CONTENT_CHARS`:
-   - Tóm tắt trực tiếp 1 lần
-5. Nếu content quá dài:
-   - Chia thành nhiều segment
-   - Tóm tắt từng segment
-   - Tổng hợp các tóm tắt con thành bản cuối
-6. Lưu `summary` vào DB để dùng lại
-
-Ý nghĩa: vừa tối ưu tốc độ (cache), vừa xử lý được tài liệu dài.
+1.  **Kiểm tra & Nhánh rẽ:** Đọc toàn bộ file. Nếu số lượng ký tự nhỏ hơn giới hạn an toàn (`LLM_MAX_CONTENT_CHARS`), gọi LLM tóm tắt trực tiếp (One-shot prompt).
+2.  **Chia nhỏ (Map):** Nếu văn bản quá lớn, hệ thống cắt văn bản thành các phân đoạn (`segment_size = LLM_MAX_CONTENT_CHARS // 2`).
+3.  **Tóm tắt từng phần:** Lặp qua từng phân đoạn, gọi API LLM để tóm tắt cục bộ từng phần nhỏ.
+4.  **Tổng hợp (Reduce):** Nối tất cả các tóm tắt cục bộ lại với nhau. Gọi LLM một lần cuối cùng với Prompt chỉ đạo: *"Dưới đây là tóm tắt từng phần... Hãy tổng hợp thành 1 bản hoàn chỉnh, mạch lạc."*
+5.  **Caching:** Lưu kết quả vào cột `summary` của SQLite. Lần sau người dùng yêu cầu, hệ thống trả về ngay lập tức (thời gian phản hồi < 0.1s).
 
 ---
 
-### 4.5 Tạo bài tập từ tài liệu
+### 2.4. Thuật toán Sinh Trắc Nghiệm Tương Tác (Quiz Generation)
 
-Endpoint: `POST /api/v1/documents/{id}/exercise`
-Hàm: `generate_exercise(...)`
+Do sử dụng Local LLM (thường là các mô hình nhỏ như Qwen 2.5 7B, Gemma, Llama 3 8B), việc yêu cầu AI sinh ra một cấu trúc JSON phức tạp cho hàng chục câu hỏi cùng lúc là bất khả thi, dễ bị lỗi format (JSON Decode Error). 
 
-Luồng:
-1. Lấy content tài liệu
-2. Cắt an toàn theo giới hạn context (`_safe_truncate`)
-3. Tạo prompt theo `exercise_type` và `count`
-4. Gọi LLM sinh bài tập
-5. Trả `exercise_text`
+Thuật toán sinh Quiz sử dụng cơ chế **Micro-Batching** và **Multi-layer Fallback Parsing**:
 
----
+```mermaid
+flowchart TD
+    Start[Yêu cầu tạo N câu hỏi Trắc nghiệm] --> Truncate[Cắt nội dung tối đa 3000 chars để tránh overwhelm AI]
+    Truncate --> Loop[Vòng lặp: Batch = 3 câu/lần]
+    Loop --> CallLLM[Gọi LLM với Prompt yêu cầu text thô: Câu X, A, B, C, D, Đáp án, Giải thích]
+    
+    CallLLM --> Clean[Làm sạch rác AI: Xóa lời chào, xóa Markdown Bold/Italic]
+    Clean --> Parse1{Thử Parse JSON?}
+    Parse1 -- Thành công --> AddToList[Thêm vào danh sách QuizQuestion]
+    
+    Parse1 -- Thất bại --> Parse2{Thử Regex Parse Text format chuẩn?}
+    Parse2 -- Thành công (Match Regex: 'Câu N:', 'A.') --> AddToList
+    
+    Parse2 -- Thất bại --> Parse3{Thử Regex Fallback đếm dòng?}
+    Parse3 -- Match dòng kết thúc bằng '?' và các Options --> AddToList
+    
+    AddToList --> Check{Đủ N câu?}
+    Check -- Chưa --> Loop
+    Check -- Đủ --> ReIndex[Đánh lại số thứ tự ID]
+    ReIndex --> End[Trả về Frontend render giao diện tương tác]
+```
 
-## 5) Thuật toán cốt lõi
-
-### 5.1 Thuật toán chunking văn bản
-
-Hàm: `_chunk_text(text, filename)`
-
-- Tách văn bản theo từ (`split()`)
-- Dùng cửa sổ trượt:
-  - `CHUNK_SIZE` (mặc định 600 từ)
-  - `CHUNK_OVERLAP` (mặc định 80 từ)
-- `step = CHUNK_SIZE - CHUNK_OVERLAP`
-- Mỗi chunk có `id`, `text`, `filename`
-
-Mục đích:
-- Giữ ngữ cảnh liên tục giữa các chunk nhờ overlap
-- Tối ưu truy xuất khi tìm đoạn liên quan
-
-### 5.2 Thuật toán embedding + retrieval
-
-#### Index
-1. Dùng model `SentenceTransformer` tạo embedding cho từng chunk
-2. Lưu vào Chroma collection cùng metadata `filename`
-
-#### Search
-1. Embed query
-2. Query Chroma theo `top_k`
-3. Có thể lọc theo `allowed_filenames`
-4. Chuyển `distance` -> `score` theo công thức:
-   - `score = 1 / (1 + distance)`
-
-Kết quả: danh sách `SearchResult(chunk, score)`
-
-### 5.3 Thuật toán chọn Full-Context vs RAG
-
-Đây là điểm chính của project:
-
-- Nếu dữ liệu đủ nhỏ: **ưu tiên Full-Context** để tăng độ đầy đủ
-- Nếu dữ liệu lớn: **chuyển RAG** để giảm tải context và vẫn đảm bảo liên quan
-
-Tiêu chí chọn dựa trên tổng số ký tự tài liệu so với ngưỡng.
+**Tính bền bỉ (Robustness):** 
+Dù LLM có "ảo giác" (hallucinate) hay trả về định dạng lộn xộn, hệ thống Regular Expression (Regex) nhiều tầng của Backend vẫn có khả năng bóc tách chính xác: nội dung câu hỏi, 4 đáp án A-B-C-D, đáp án đúng và lời giải thích. Đảm bảo UI luôn hiển thị đẹp mắt.
 
 ---
 
-## 6) Quản lý context window và an toàn khi gọi LLM
+## 3. Khởi Động & Quản Lý Trạng Thái (Lifecycle)
 
-`LLMService` có các cơ chế:
-
-1. Tự detect context window model qua endpoint `/models`
-2. Tính `max_output_tokens` và `max_content_chars` an toàn
-3. `_safe_truncate(...)` chỉ cắt khi vượt ngưỡng thực tế
-4. HTTP timeout rõ ràng (connect/read/write/pool)
-5. Bắt lỗi kết nối, timeout, lỗi HTTP và trả thông báo nghiệp vụ
-
----
-
-## 7) Luồng khởi động hệ thống
-
-Tại `backend/main.py` (lifespan):
-
-1. `init_db()` tạo bảng SQLite nếu chưa có
-2. Khởi tạo singleton `LLMService`
-3. `reload_indexed_documents(...)`:
-   - lấy tất cả tài liệu `INDEXED`
-   - ưu tiên nạp `.extracted.txt`
-   - đồng bộ danh sách file cho knowledge base khi server restart
-
-Mục tiêu: hệ thống lên là dùng được ngay với dữ liệu đã xử lý trước đó.
-
----
-
-## 8) Các điểm xử lý lỗi và biên quan trọng
-
-- Chưa có tài liệu index -> Q&A trả phản hồi hướng dẫn upload
-- File quá lớn (>50MB) -> từ chối upload
-- File không hỗ trợ -> trả lỗi 400
-- Lỗi parse PDF/DOCX -> trạng thái `ERROR`, có message
-- Không kết nối được local LLM -> health báo warning/offline
-- Context quá dài -> truncate có chú thích cho người dùng
-
----
-
-## 9) Tóm tắt ngắn vòng đời một câu hỏi
-
-1. User đặt câu hỏi ở tab Hỏi & Đáp
-2. Frontend gửi `question`, `top_k`, `history`, `doc_ids`
-3. Backend chọn mode `full_context` hoặc `rag`
-4. LLM sinh câu trả lời dựa trên tài liệu
-5. Backend lưu lịch sử và trả kết quả + nguồn trích dẫn
-6. Frontend hiển thị badge mode và nguồn
-
----
-
-## 10) Kết luận
-
-Project được thiết kế theo hướng:
-- Tách lớp rõ ràng (API / Service / Repository)
-- Kết hợp **Full-Context** và **RAG retrieval** linh hoạt
-- Dễ mở rộng cho các nghiệp vụ học tập (tóm tắt, bài tập, hỏi đáp)
-- Tối ưu trải nghiệm người dùng với xử lý nền, cache summary, và lịch sử hội thoại
+-   **Singleton LLMService:** Service quản lý kết nối LLM được khởi tạo 1 lần duy nhất để tiết kiệm RAM.
+-   **Tự động giới hạn Context Window:** Khi FastAPI khởi động (trong `lifespan` event), hệ thống gọi API `/v1/models` của LM Studio/Ollama để detect kích thước Context Window của mô hình hiện tại (ví dụ: 8192 tokens). Từ đó, tự động tính toán `max_content_chars` và `max_output_tokens` giới hạn an toàn.
+-   **Reload Knowledge Base (KB):** Quét database SQLite lấy các tài liệu có trạng thái `INDEXED`, tìm các file `.extracted.txt` tương ứng và nạp lại vào bộ nhớ của `LLMService`. Giúp hệ thống không bị mất khả năng tìm kiếm vector khi restart server FastAPI.
+-   **Xử lý lỗi (Error Handling):** Hệ thống chặn tải file quá 50MB, tự động sanitize ký tự Null (`\x00`) gây crash ChromaDB, và timeout an toàn (600s) cho các request gọi AI tốn thời gian.
