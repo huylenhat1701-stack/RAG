@@ -28,3 +28,8 @@ streamlit==1.41.0
 # Utilities
 python-dotenv==1.0.1
 pydantic==2.10.3
+
+# Authentication
+bcrypt==4.2.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4

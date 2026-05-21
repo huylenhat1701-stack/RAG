@@ -1,13 +1,26 @@
 """
 Domain Models - SQLAlchemy ORM
-Định nghĩa 2 bảng: documents và chat_history
+Định nghĩa các bảng: users, documents, chat_history, quiz_history, user_knowledge
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger
+from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, ForeignKey
 from sqlalchemy.sql import func
 
 from ..db.database import Base
+
+
+class User(Base):
+    """
+    Bảng người dùng — xác thực và phân quyền dữ liệu.
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(200), nullable=True, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Document(Base):
@@ -23,6 +36,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     file_name = Column(String(255), nullable=False)                   # Tên file gốc
     file_path = Column(String(512), nullable=False)                   # Đường dẫn lưu trữ
     file_size = Column(BigInteger, default=0)                          # Kích thước bytes
@@ -43,6 +57,7 @@ class ChatHistory(Base):
     __tablename__ = "chat_history"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     question = Column(Text, nullable=False)                           # Câu hỏi người dùng
     answer = Column(Text, nullable=False)                             # Câu trả lời AI
     sources_json = Column(Text, nullable=True)                        # JSON list tên file nguồn
@@ -57,6 +72,7 @@ class QuizHistory(Base):
     __tablename__ = "quiz_history"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     session_id = Column(String(100), nullable=False, index=True)      # Phiên làm việc / User
     doc_id = Column(Integer, nullable=False, index=True)              # File liên quan
     chunk_id = Column(String(100), nullable=False, index=True)        # Chunk kiến thức
@@ -71,6 +87,7 @@ class UserKnowledge(Base):
     __tablename__ = "user_knowledge"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     session_id = Column(String(100), nullable=False, index=True)
     doc_id = Column(Integer, nullable=False, index=True)
     chunk_id = Column(String(100), nullable=False, index=True)

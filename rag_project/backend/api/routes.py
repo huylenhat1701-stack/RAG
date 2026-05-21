@@ -1,5 +1,5 @@
 """
-API Routes - Các endpoints RESTful
+API Routes - Các endpoints RESTful (Có xác thực user)
 POST /documents/upload       - Upload tài liệu
 GET  /documents              - Danh sách tài liệu
 GET  /documents/{id}/content - Xem nội dung tài liệu
@@ -8,7 +8,7 @@ DELETE /documents/{id}       - Xóa tài liệu
 POST /chat/ask               - Hỏi đáp RAG
 GET  /chat/history           - Lịch sử hỏi đáp
 DELETE /chat/history         - Xóa lịch sử
-GET  /health                 - Kiểm tra trạng thái
+GET  /health                 - Kiểm tra trạng thái (public)
 """
 
 import threading
@@ -20,6 +20,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..db.database import get_db
+from ..api.deps import get_current_user
+from ..models.domain import User
 from ..repositories.document_repo import DocumentRepository
 from ..repositories.history_repo import HistoryRepository
 from ..services.llm_service import LLMService, get_llm_service
@@ -63,6 +65,7 @@ async def upload_document(
     file: UploadFile = File(..., description="File tài liệu cần upload"),
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Upload và xử lý một tài liệu mới."""
     # Kiểm tra định dạng file
@@ -92,6 +95,7 @@ async def upload_document(
         file_path=str(saved_path),
         file_size=file_size,
         file_type=file_ext.lstrip("."),
+        user_id=current_user.id,
     )
 
     # Xử lý và index trong background
@@ -121,10 +125,13 @@ async def upload_document(
     summary="Danh sách tài liệu",
     tags=["Tài liệu"],
 )
-def list_documents(db: Session = Depends(get_db)):
-    """Lấy danh sách tất cả tài liệu đã upload."""
+def list_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách tất cả tài liệu của user."""
     doc_repo = DocumentRepository(db)
-    docs = doc_repo.get_all()
+    docs = doc_repo.get_all(user_id=current_user.id)
     return DocumentListResponse(total=len(docs), documents=docs)
 
 
@@ -135,10 +142,14 @@ def list_documents(db: Session = Depends(get_db)):
     description="Đọc và trả về nội dung đầy đủ của tài liệu theo ID.",
     tags=["Tài liệu"],
 )
-def read_document_content(doc_id: int, db: Session = Depends(get_db)):
+def read_document_content(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Đọc nội dung đầy đủ của tài liệu."""
     doc_repo = DocumentRepository(db)
-    doc = doc_repo.get_by_id(doc_id)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
@@ -168,8 +179,15 @@ def summarize_doc(
     doc_id: int,
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
-    """Tóm tắt tài liệu bằng AI (CodexOAuth)."""
+    """Tóm tắt tài liệu bằng AI (Local LLM)."""
+    # Kiểm tra quyền sở hữu
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
     try:
         return summarize_document(doc_id, db, llm_service)
     except ValueError as e:
@@ -184,10 +202,14 @@ def summarize_doc(
     summary="Xóa tài liệu",
     tags=["Tài liệu"],
 )
-def delete_document(doc_id: int, db: Session = Depends(get_db)):
+def delete_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Xóa tài liệu theo ID."""
     doc_repo = DocumentRepository(db)
-    doc = doc_repo.get_by_id(doc_id)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
@@ -213,10 +235,11 @@ def download_document(
     doc_id: int,
     source: str = Query("extracted", regex="^(original|extracted)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Cho phép tải file gốc hoặc file text đã xuất từ tài liệu."""
     doc_repo = DocumentRepository(db)
-    doc = doc_repo.get_by_id(doc_id)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
@@ -247,7 +270,14 @@ def create_exercise(
     request: ExerciseRequest,
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
+    # Kiểm tra quyền
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
     try:
         return generate_exercise(
             doc_id=doc_id,
@@ -273,14 +303,22 @@ def create_quiz(
     request: QuizRequest,
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Tạo bộ câu hỏi thi trắc nghiệm tương tác từ tài liệu."""
+    # Kiểm tra quyền
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
     try:
         return generate_quiz(
             doc_id=doc_id,
             count=request.count or 10,
             db=db,
             llm_service=llm_service,
+            session_id=str(current_user.id),
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -298,12 +336,13 @@ def submit_quiz_result(
     doc_id: int,
     request: QuizSubmitRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Cập nhật xác suất hiểu bài của người dùng dựa trên kết quả trả lời."""
     from ..services.adaptive_tutor_service import adaptive_tutor_service
     try:
         new_prob = adaptive_tutor_service.update_knowledge(
-            session_id=request.session_id,
+            session_id=str(current_user.id),
             doc_id=doc_id,
             chunk_id=request.chunk_id,
             is_correct=1 if request.is_correct else 0,
@@ -325,12 +364,19 @@ def create_learning_path(
     request: LearningPathRequest,
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Tạo lộ trình học tập cá nhân hóa sau khi người dùng hoàn thành quiz."""
+    # Kiểm tra quyền
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
     try:
         return generate_learning_path(
             doc_id=doc_id,
-            session_id=request.session_id,
+            session_id=str(current_user.id),
             wrong_chunk_ids=request.wrong_chunk_ids,
             db=db,
             llm_service=llm_service,
@@ -355,6 +401,7 @@ def ask_question(
     request: AskRequest,
     db: Session = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Hỏi đáp thông minh dựa trên tài liệu đã upload."""
     try:
@@ -365,6 +412,7 @@ def ask_question(
             llm_service=llm_service,
             history=[msg.dict() for msg in request.history] if request.history else None,
             doc_ids=request.doc_ids if request.doc_ids else None,
+            user_id=current_user.id,
         )
         return response
     except RuntimeError as e:
@@ -385,11 +433,12 @@ def get_history(
     limit: int = 50,
     skip: int = 0,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Lấy lịch sử các phiên hỏi đáp."""
+    """Lấy lịch sử các phiên hỏi đáp của user."""
     hist_repo = HistoryRepository(db)
-    histories = hist_repo.get_all(limit=limit, skip=skip)
-    total = hist_repo.count()
+    histories = hist_repo.get_all(limit=limit, skip=skip, user_id=current_user.id)
+    total = hist_repo.count(user_id=current_user.id)
     return ChatHistoryListResponse(
         total=total,
         histories=[ChatHistoryResponse.from_orm_with_sources(h) for h in histories],
@@ -402,15 +451,18 @@ def get_history(
     summary="Xóa lịch sử",
     tags=["Hỏi & Đáp"],
 )
-def clear_history(db: Session = Depends(get_db)):
-    """Xóa toàn bộ lịch sử hỏi đáp."""
+def clear_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Xóa toàn bộ lịch sử hỏi đáp của user."""
     hist_repo = HistoryRepository(db)
-    deleted = hist_repo.clear_all()
+    deleted = hist_repo.clear_all(user_id=current_user.id)
     return MessageResponse(message=f"Đã xóa {deleted} bản ghi lịch sử.")
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH CHECK (public — không cần auth)
 # ============================================================
 
 @router.get(

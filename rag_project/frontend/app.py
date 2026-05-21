@@ -29,6 +29,36 @@ st.set_page_config(
 
 # URL của FastAPI Backend
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/api/v1")
+AUTH_URL = BACKEND_URL.rsplit("/api/v1", 1)[0] + "/api/v1/auth"
+
+# ============================================================
+# Auth Session State
+# ============================================================
+for _auth_k, _auth_v in {
+    "logged_in": False,
+    "access_token": "",
+    "user_info": None,
+}.items():
+    if _auth_k not in st.session_state:
+        st.session_state[_auth_k] = _auth_v
+
+
+def _get_auth_headers():
+    """Trả về headers có Bearer token nếu đã đăng nhập."""
+    if st.session_state.access_token:
+        return {"Authorization": f"Bearer {st.session_state.access_token}"}
+    return {}
+
+
+def do_logout():
+    """Xóa session đăng nhập."""
+    st.session_state.logged_in = False
+    st.session_state.access_token = ""
+    st.session_state.user_info = None
+    # Xóa chat messages khi logout
+    if "chat_messages" in st.session_state:
+        st.session_state.chat_messages = []
+    st.rerun()
 
 # ============================================================
 # CSS — Light / Neutral Academic Theme
@@ -1007,9 +1037,17 @@ section[data-testid="stSidebar"] hr { border-color: var(--border) !important; }
 # ============================================================
 def api_get(endpoint: str, params: dict = None):
     try:
-        resp = requests_session.get(f"{BACKEND_URL}{endpoint}", params=params, timeout=600)
+        resp = requests_session.get(
+            f"{BACKEND_URL}{endpoint}",
+            params=params,
+            headers=_get_auth_headers(),
+            timeout=600,
+        )
         if resp.status_code == 200:
             return resp.json(), None
+        if resp.status_code == 401:
+            do_logout()
+            return None, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."
         return None, f"Lỗi {resp.status_code}: {resp.text}"
     except requests.ConnectionError:
         return None, "Không kết nối được Backend. Hãy chạy: `start.bat`"
@@ -1019,12 +1057,26 @@ def api_get(endpoint: str, params: dict = None):
 
 def api_post(endpoint: str, json_data: dict = None, files=None):
     try:
+        headers = _get_auth_headers()
         if files:
-            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", files=files, timeout=300)
+            resp = requests_session.post(
+                f"{BACKEND_URL}{endpoint}",
+                files=files,
+                headers=headers,
+                timeout=300,
+            )
         else:
-            resp = requests_session.post(f"{BACKEND_URL}{endpoint}", json=json_data, timeout=600)
+            resp = requests_session.post(
+                f"{BACKEND_URL}{endpoint}",
+                json=json_data,
+                headers=headers,
+                timeout=600,
+            )
         if resp.status_code == 200:
             return resp.json(), None
+        if resp.status_code == 401:
+            do_logout()
+            return None, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."
         return None, f"Lỗi {resp.status_code}: {resp.json().get('detail', resp.text)}"
     except requests.ConnectionError:
         return None, "Không kết nối được Backend."
@@ -1036,9 +1088,16 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
 
 def api_delete(endpoint: str):
     try:
-        resp = requests_session.delete(f"{BACKEND_URL}{endpoint}", timeout=120)
+        resp = requests_session.delete(
+            f"{BACKEND_URL}{endpoint}",
+            headers=_get_auth_headers(),
+            timeout=120,
+        )
         if resp.status_code == 200:
             return resp.json(), None
+        if resp.status_code == 401:
+            do_logout()
+            return None, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."
         return None, f"Lỗi {resp.status_code}: {resp.text}"
     except Exception as e:
         return None, str(e)
@@ -1068,11 +1127,111 @@ def get_status_badge(status: str) -> str:
 
 
 # ============================================================
-# Sidebar
+# LOGIN / REGISTER GATE
+# ============================================================
+if not st.session_state.logged_in:
+    st.markdown("""
+    <div style="max-width:420px;margin:4rem auto;text-align:center;">
+        <h1 style="font-size:2rem;font-weight:800;letter-spacing:-0.03em;color:#0a0a0a;margin-bottom:0.3rem;">📖 Smart Document Reader</h1>
+        <p style="color:#6b7280;font-size:0.88rem;margin-bottom:2rem;">Local RAG · ChromaDB · LM Studio</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    login_tab, register_tab = st.tabs(["🔑 Đăng Nhập", "📝 Đăng Ký"])
+
+    with login_tab:
+        with st.form("login_form"):
+            l_username = st.text_input("Tên đăng nhập", key="login_user")
+            l_password = st.text_input("Mật khẩu", type="password", key="login_pass")
+            l_submit = st.form_submit_button("Đăng Nhập", type="primary", use_container_width=True)
+
+            if l_submit:
+                if not l_username or not l_password:
+                    st.error("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.")
+                else:
+                    try:
+                        resp = requests_session.post(
+                            f"{AUTH_URL}/login",
+                            json={"username": l_username, "password": l_password},
+                            timeout=15,
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            st.session_state.logged_in = True
+                            st.session_state.access_token = data["access_token"]
+                            st.session_state.user_info = data["user"]
+                            st.rerun()
+                        else:
+                            detail = resp.json().get("detail", "Sai tên đăng nhập hoặc mật khẩu.")
+                            st.error(detail)
+                    except requests.ConnectionError:
+                        st.error("Không kết nối được Backend. Hãy chạy `start.bat`.")
+                    except Exception as e:
+                        st.error(f"Lỗi: {e}")
+
+    with register_tab:
+        with st.form("register_form"):
+            r_fullname = st.text_input("Họ tên", key="reg_name")
+            r_username = st.text_input("Tên đăng nhập", key="reg_user")
+            r_password = st.text_input("Mật khẩu (≥ 6 ký tự)", type="password", key="reg_pass")
+            r_password2 = st.text_input("Xác nhận mật khẩu", type="password", key="reg_pass2")
+            r_submit = st.form_submit_button("Đăng Ký", type="primary", use_container_width=True)
+
+            if r_submit:
+                if not r_username or not r_password:
+                    st.error("Vui lòng nhập đầy đủ thông tin.")
+                elif len(r_password) < 6:
+                    st.error("Mật khẩu phải có ít nhất 6 ký tự.")
+                elif r_password != r_password2:
+                    st.error("Mật khẩu xác nhận không khớp.")
+                else:
+                    try:
+                        resp = requests_session.post(
+                            f"{AUTH_URL}/register",
+                            json={"username": r_username, "password": r_password, "full_name": r_fullname},
+                            timeout=15,
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            st.session_state.logged_in = True
+                            st.session_state.access_token = data["access_token"]
+                            st.session_state.user_info = data["user"]
+                            st.success("Đăng ký thành công!")
+                            st.rerun()
+                        else:
+                            detail = resp.json().get("detail", "Không thể đăng ký.")
+                            st.error(detail)
+                    except requests.ConnectionError:
+                        st.error("Không kết nối được Backend. Hãy chạy `start.bat`.")
+                    except Exception as e:
+                        st.error(f"Lỗi: {e}")
+
+    st.markdown("""
+    <div style="text-align:center;margin-top:2rem;">
+        <p style="color:#9ca3af;font-size:0.75rem;">Sinh viên: Lê Nhật Huy — B23DCAT126 | Phạm Hải Đông — B23DCVT090</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+# ============================================================
+# Sidebar (chỉ hiển thị khi đã đăng nhập)
 # ============================================================
 with st.sidebar:
     st.markdown('<p class="sidebar-title">Smart Document Reader</p>', unsafe_allow_html=True)
     st.markdown('<p class="sidebar-subtitle">Local RAG · ChromaDB · LM Studio</p>', unsafe_allow_html=True)
+
+    # ── User info & logout ────────────────────────────────
+    user_info = st.session_state.user_info or {}
+    display_name = user_info.get("full_name") or user_info.get("username", "User")
+    st.markdown(f"""
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:0.55rem 0.75rem;margin-bottom:0.7rem;">
+        <span style="font-size:0.8rem;font-weight:600;color:#1e40af;">👤 {_html.escape(display_name)}</span>
+        <span style="font-size:0.68rem;color:#6b7280;float:right;">@{_html.escape(user_info.get('username', ''))}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("🚪 Đăng xuất", use_container_width=True, key="btn_logout"):
+        do_logout()
 
     # ── Single health check call ──────────────────────────
     health_data, health_err = api_get("/health")
@@ -1580,7 +1739,6 @@ with tab_exercise:
                             api_post(
                                 f"/documents/{st.session_state.quiz_doc_id}/quiz/submit",
                                 json_data={
-                                    "session_id": "default_user",
                                     "chunk_id": chunk_id,
                                     "is_correct": is_correct
                                 }
@@ -1715,7 +1873,6 @@ with tab_exercise:
                             lp_result, lp_err = api_post(
                                 f"/documents/{st.session_state.quiz_doc_id}/learning-path",
                                 json_data={
-                                    "session_id": "default_user",
                                     "wrong_chunk_ids": st.session_state.quiz_wrong_chunks,
                                 }
                             )

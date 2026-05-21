@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .db.database import init_db, SessionLocal
 from .api.routes import router
+from .api.auth_routes import auth_router
 from .repositories.document_repo import DocumentRepository
 from .services.llm_service import get_llm_service
 from .services.document_service import reload_indexed_documents
@@ -73,6 +74,7 @@ app.add_middleware(
 
 # Đăng ký tất cả routes
 app.include_router(router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1/auth")
 
 
 @app.get("/", tags=["Gốc"])

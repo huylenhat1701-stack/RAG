@@ -26,6 +26,7 @@ def answer_question(
     llm_service: LLMService,
     history: List[dict] = None,
     doc_ids: List[int] = None,
+    user_id: int = None,
 ) -> AskResponse:
     """
     Luồng Q&A với Full-Context Mode:
@@ -43,7 +44,7 @@ def answer_question(
     doc_repo = DocumentRepository(db)
     hist_repo = HistoryRepository(db)
 
-    indexed_count = doc_repo.count_indexed()
+    indexed_count = doc_repo.count_indexed(user_id=user_id)
     if indexed_count == 0:
         return AskResponse(
             question=question,
@@ -73,7 +74,7 @@ def answer_question(
                 target_docs.append(doc)
     else:
         # Không chọn cụ thể → lấy tất cả tài liệu đã INDEXED
-        target_docs = doc_repo.get_indexed()
+        target_docs = doc_repo.get_indexed(user_id=user_id)
 
     # ----------------------------------------------------------------
     # Thử Full-Context Mode: đọc toàn bộ nội dung tài liệu
@@ -180,6 +181,7 @@ def answer_question(
         answer=answer,
         sources=sources_for_db,
         model_used=llm_service._model_name,
+        user_id=user_id,
     )
 
     return AskResponse(

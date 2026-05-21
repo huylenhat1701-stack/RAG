@@ -39,6 +39,6 @@ def get_db():
 def init_db():
     """Khởi tạo database - tạo tất cả bảng."""
     # Import các model để SQLAlchemy nhận diện
-    from ..models.domain import Document, ChatHistory, QuizHistory, UserKnowledge  # noqa: F401
+    from ..models.domain import User, Document, ChatHistory, QuizHistory, UserKnowledge  # noqa: F401
     Base.metadata.create_all(bind=engine)
     print("[OK] Database da duoc khoi tao.")

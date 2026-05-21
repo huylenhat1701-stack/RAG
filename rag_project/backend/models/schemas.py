@@ -225,3 +225,38 @@ class ErrorResponse(BaseModel):
     """Schema trả về lỗi."""
     error: str
     detail: Optional[str] = None
+
+
+# ============================================================
+# Auth Schemas
+# ============================================================
+class UserRegisterRequest(BaseModel):
+    """Schema đăng ký tài khoản."""
+    username: str = Field(..., min_length=3, max_length=50, description="Tên đăng nhập")
+    password: str = Field(..., min_length=6, max_length=100, description="Mật khẩu")
+    full_name: str = Field(default="", max_length=200, description="Họ tên đầy đủ")
+
+
+class UserLoginRequest(BaseModel):
+    """Schema đăng nhập."""
+    username: str = Field(..., description="Tên đăng nhập")
+    password: str = Field(..., description="Mật khẩu")
+
+
+class UserResponse(BaseModel):
+    """Schema trả về thông tin user."""
+    id: int
+    username: str
+    full_name: Optional[str] = ""
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    """Schema trả về JWT token sau đăng nhập."""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
