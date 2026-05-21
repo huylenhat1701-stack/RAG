@@ -29,7 +29,7 @@ LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL", "local-model")
 # ============================================================
 # FULL-CONTEXT MODE — Không giới hạn token
 # Đọc toàn bộ tài liệu, trả lời chính xác nhất có thể.
-# Giá trị rất lớn để không cắt xén nội dung tài liệu.
+# Giá trị rất lớn để không cắt xén nội dung tài liệu.   
 # Model LM Studio sẽ tự xử lý giới hạn context window của nó.
 # ============================================================
 # Số ký tự tối đa đưa vào prompt (500,000 ≈ toàn bộ sách 400 trang)

@@ -48,3 +48,31 @@ class ChatHistory(Base):
     sources_json = Column(Text, nullable=True)                        # JSON list tên file nguồn
     model_used = Column(String(50), nullable=True)                    # Model LLM đã dùng
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuizHistory(Base):
+    """
+    Bảng lưu lịch sử từng câu trả lời Quiz của người dùng.
+    """
+    __tablename__ = "quiz_history"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    session_id = Column(String(100), nullable=False, index=True)      # Phiên làm việc / User
+    doc_id = Column(Integer, nullable=False, index=True)              # File liên quan
+    chunk_id = Column(String(100), nullable=False, index=True)        # Chunk kiến thức
+    is_correct = Column(Integer, nullable=False)                      # 1 nếu đúng, 0 nếu sai
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class UserKnowledge(Base):
+    """
+    Bảng lưu ma trận xác suất hiểu bài (BKT) của người dùng cho từng chunk kiến thức.
+    """
+    __tablename__ = "user_knowledge"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    doc_id = Column(Integer, nullable=False, index=True)
+    chunk_id = Column(String(100), nullable=False, index=True)
+    probability = Column(Integer, default=50)                         # % hiểu bài (0 - 100), mặc định 50%
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -99,6 +99,8 @@ class QuizQuestion(BaseModel):
     options: dict          # {"A": "...", "B": "...", "C": "...", "D": "..."}
     answer: str            # "A" | "B" | "C" | "D"
     explanation: str = ""  # Giải thích tại sao đáp án đúng
+    step_by_step_explanation: str = "" # CoT Math Tutor
+    chunk_id: str = ""     # Để biết câu hỏi sinh từ đoạn kiến thức nào
 
 
 class QuizResponse(BaseModel):
@@ -113,6 +115,43 @@ class QuizResponse(BaseModel):
 class QuizRequest(BaseModel):
     """Schema nhận yêu cầu tạo quiz trắc nghiệm."""
     count: Optional[int] = Field(default=10, ge=3, le=30, description="Số câu hỏi")
+
+
+class QuizSubmitRequest(BaseModel):
+    """Schema nhận kết quả làm bài tập của user."""
+    session_id: str = Field(default="default_user", description="ID người dùng")
+    chunk_id: str = Field(..., description="ID của chunk kiến thức")
+    is_correct: bool = Field(..., description="Người dùng trả lời đúng hay sai")
+
+
+class QuizSubmitResponse(BaseModel):
+    """Schema trả về xác suất hiểu bài sau khi submit."""
+    success: bool = True
+    new_probability: int
+
+
+class LearningPathRequest(BaseModel):
+    """Schema nhận yêu cầu tạo lộ trình học tập."""
+    session_id: str = Field(default="default_user", description="ID phiên người dùng")
+    wrong_chunk_ids: List[str] = Field(default=[], description="Danh sách chunk_id của câu trả lời sai")
+
+
+class LearningPathItem(BaseModel):
+    """Một bước trong lộ trình học tập."""
+    topic: str                  # Tên chủ đề / tiêu đề ngắn
+    content_snippet: str        # Đoạn nội dung trích từ tài liệu cần đọc lại
+    advice: str                 # Lời khuyên AI cụ thể
+    bkt_probability: int = 0    # Xác suất hiểu bài BKT (0-100)
+    chunk_id: str = ""
+
+
+class LearningPathResponse(BaseModel):
+    """Schema trả về lộ trình học tập cá nhân hóa."""
+    doc_id: int
+    file_name: str
+    items: List[LearningPathItem]
+    total_weak: int
+    overall_message: str        # Nhận xét tổng thể từ AI
 
 
 class SourceInfo(BaseModel):

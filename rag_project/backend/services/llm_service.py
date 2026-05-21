@@ -326,6 +326,93 @@ class LLMService:
 
         return search_results
 
+    def get_chunks_by_ids(self, chunk_ids: List[str]) -> List[ChunkDocument]:
+        """Lấy danh sách các chunk kiến thức dựa theo ID."""
+        if not chunk_ids or self._collection.count() == 0:
+            return []
+            
+        results = self._collection.get(ids=chunk_ids)
+        chunks = []
+        if results.get("documents"):
+            for i in range(len(results["ids"])):
+                chunk = ChunkDocument(
+                    id=results["ids"][i],
+                    text=results["documents"][i],
+                    filename=results["metadatas"][i].get("filename", "unknown") if results.get("metadatas") else "unknown",
+                )
+                chunks.append(chunk)
+        return chunks
+
+    def get_random_chunks(self, filename: str, count: int = 5) -> List[ChunkDocument]:
+        """Lấy ngẫu nhiên các chunk từ một tài liệu cụ thể."""
+        if self._collection.count() == 0:
+            return []
+            
+        results = self._collection.get(where={"filename": filename})
+        if not results.get("documents"):
+            return []
+            
+        import random
+        # Zip thành list tuples để sample
+        items = list(zip(results["ids"], results["documents"], results["metadatas"]))
+        if len(items) > count:
+            items = random.sample(items, count)
+            
+        chunks = []
+        for id_val, doc_val, meta_val in items:
+            chunks.append(ChunkDocument(
+                id=id_val,
+                text=doc_val,
+                filename=meta_val.get("filename", "unknown") if meta_val else "unknown"
+            ))
+        return chunks
+
+    def get_random_chunks_by_stem(self, stem: str, count: int = 5) -> List[ChunkDocument]:
+        """Lấy ngẫu nhiên các chunk từ tài liệu bằng cách tìm tên file chứa stem.
+        
+        Dùng khi PDF được lưu dưới dạng .extracted.txt nên tên file không khớp chính xác.
+        Ví dụ: stem='BT Giai tich 2' sẽ khớp 'BT Giai tich 2.extracted.txt'
+        """
+        if self._collection.count() == 0:
+            return []
+
+        # Lấy tất cả các chunk và lọc theo stem
+        try:
+            all_results = self._collection.get(limit=self._collection.count())
+        except Exception:
+            return []
+
+        if not all_results.get("documents") or not all_results.get("metadatas"):
+            return []
+
+        # Lọc chunk có filename chứa stem (không phân biệt hoa/thường)
+        stem_lower = stem.lower()
+        matching_items = []
+        for i in range(len(all_results["ids"])):
+            meta = all_results["metadatas"][i] if all_results.get("metadatas") else {}
+            fn = meta.get("filename", "") if meta else ""
+            if stem_lower in fn.lower():
+                matching_items.append((
+                    all_results["ids"][i],
+                    all_results["documents"][i],
+                    meta,
+                ))
+
+        if not matching_items:
+            return []
+
+        import random
+        if len(matching_items) > count:
+            matching_items = random.sample(matching_items, count)
+
+        chunks = []
+        for id_val, doc_val, meta_val in matching_items:
+            chunks.append(ChunkDocument(
+                id=id_val,
+                text=doc_val,
+                filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
+            ))
+        return chunks
     # ------------------------------------------------------------------
     # Generation — Full-Context Mode (ưu tiên) & RAG Mode (fallback)
     # ------------------------------------------------------------------

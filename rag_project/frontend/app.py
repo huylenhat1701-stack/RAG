@@ -1451,7 +1451,11 @@ with tab_exercise:
         "quiz_answered": {},       # {idx: "A"/"B"/"C"/"D"}
         "quiz_phase": "setup",     # "setup" | "playing" | "result"
         "quiz_doc_name": "",
+        "quiz_doc_id": 0,
         "quiz_model": "",
+        "quiz_wrong_chunks": [],   # chunk_id của các câu trả lời sai
+        "show_learning_path": False,
+        "learning_path_data": None,
     }.items():
         if _k not in st.session_state:
             st.session_state[_k] = _v
@@ -1502,6 +1506,7 @@ with tab_exercise:
                     st.session_state.quiz_answered = {}
                     st.session_state.quiz_phase = "playing"
                     st.session_state.quiz_doc_name = result.get("file_name", qz_selected)
+                    st.session_state.quiz_doc_id = doc_id
                     st.session_state.quiz_model = result.get("model_used", "")
                     st.rerun()
                 else:
@@ -1565,8 +1570,24 @@ with tab_exercise:
                         use_container_width=True,
                     ):
                         st.session_state.quiz_answered[idx] = key
-                        if key == correct:
+                        is_correct = (key == correct)
+                        if is_correct:
                             st.session_state.quiz_score += 1
+
+                        # Gọi API submit kết quả để cập nhật BKT
+                        chunk_id = q.get("chunk_id", "")
+                        if chunk_id:
+                            api_post(
+                                f"/documents/{st.session_state.quiz_doc_id}/quiz/submit",
+                                json_data={
+                                    "session_id": "default_user",
+                                    "chunk_id": chunk_id,
+                                    "is_correct": is_correct
+                                }
+                            )
+                            # Thu thập chunk_id của câu sai để tạo lộ trình
+                            if not is_correct and chunk_id not in st.session_state.quiz_wrong_chunks:
+                                st.session_state.quiz_wrong_chunks.append(chunk_id)
                         st.rerun()
         else:
             # Đã trả lời — hiển thị kết quả
@@ -1599,6 +1620,11 @@ with tab_exercise:
             if expl:
                 safe_expl = _html.escape(str(expl))
                 st.markdown(f'<div class="quiz-explanation">💡 {safe_expl}</div>', unsafe_allow_html=True)
+
+            step_expl = q.get("step_by_step_explanation", "")
+            if step_expl:
+                st.markdown('<div class="quiz-explanation"><strong>Bước giải chi tiết (CoT):</strong></div>', unsafe_allow_html=True)
+                st.info(step_expl)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1662,7 +1688,7 @@ with tab_exercise:
         """, unsafe_allow_html=True)
 
         # Nút hành động
-        btn1, btn2, btn3 = st.columns(3)
+        btn1, btn2, btn3, btn4 = st.columns(4)
         with btn1:
             if st.button("🔁 Thi Lại", use_container_width=True):
                 st.session_state.quiz_phase = "setup"
@@ -1670,15 +1696,161 @@ with tab_exercise:
                 st.session_state.quiz_answered = {}
                 st.session_state.quiz_score = 0
                 st.session_state.quiz_index = 0
+                st.session_state.quiz_wrong_chunks = []
+                st.session_state.show_learning_path = False
+                st.session_state.learning_path_data = None
                 st.rerun()
         with btn2:
             if st.button("📋 Xem Lại Đáp Án", use_container_width=True):
                 st.session_state["show_review"] = not st.session_state.get("show_review", False)
                 st.rerun()
         with btn3:
+            # Nút Lộ Trình — chỉ hiện khi có câu sai
+            if wrong > 0:
+                lp_label = "✅ Đã có Lộ Trình" if st.session_state.show_learning_path else "🗺️ Lộ Trình Học Tập"
+                if st.button(lp_label, use_container_width=True, type="primary" if not st.session_state.show_learning_path else "secondary"):
+                    if not st.session_state.show_learning_path:
+                        # Gọi API tạo lộ trình
+                        with st.spinner("🤖 AI đang phân tích và tạo lộ trình học tập..."):
+                            lp_result, lp_err = api_post(
+                                f"/documents/{st.session_state.quiz_doc_id}/learning-path",
+                                json_data={
+                                    "session_id": "default_user",
+                                    "wrong_chunk_ids": st.session_state.quiz_wrong_chunks,
+                                }
+                            )
+                        if lp_err:
+                            st.error(f"Lỗi tạo lộ trình: {lp_err}")
+                        else:
+                            st.session_state.learning_path_data = lp_result
+                            st.session_state.show_learning_path = True
+                    else:
+                        st.session_state.show_learning_path = False
+                    st.rerun()
+        with btn4:
             if st.button("🏠 Về Trang Chủ", use_container_width=True):
                 st.session_state.quiz_phase = "setup"
                 st.rerun()
+
+        # ── PHẦN LỘ TRÌNH HỌC TẬP ────────────────────────────────
+        if st.session_state.show_learning_path and st.session_state.learning_path_data:
+            lp = st.session_state.learning_path_data
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+                border-radius: 14px;
+                padding: 1.5rem 2rem;
+                margin-bottom: 1.2rem;
+                color: #fff;
+            ">
+                <div style="font-size:1.15rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.3rem;">
+                    🗺️ Lộ Trình Học Tập Cá Nhân Hóa
+                </div>
+                <div style="font-size:0.82rem;opacity:0.85;">
+                    Dựa trên kết quả của bạn — AI đã phân tích và đề xuất các chủ đề cần ôn luyện
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Nhận xét tổng thể
+            overall_msg = lp.get("overall_message", "")
+            if overall_msg:
+                st.markdown(f"""
+                <div style="
+                    background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;
+                    border-radius:0 10px 10px 0;padding:0.9rem 1.2rem;margin-bottom:1.2rem;
+                    color:#78350f;font-size:0.9rem;font-weight:500;
+                ">💬 {_html.escape(overall_msg)}</div>
+                """, unsafe_allow_html=True)
+
+            lp_items = lp.get("items", [])
+            if not lp_items:
+                st.info("Không tìm thấy nội dung cụ thể để tạo lộ trình. Hãy thử làm thêm câu hỏi!")
+            else:
+                import re
+                for step_idx, item in enumerate(lp_items, 1):
+                    topic      = _html.escape(str(item.get("topic", f"Chủ đề {step_idx}")))
+                    
+                    raw_snippet = str(item.get("content_snippet", ""))
+                    # Lọc bỏ ký tự lạ (như 🗹 hoặc unicode rác từ PDF)
+                    # Giu lai ky tu co the hien thi (loai bo garbage chars tu PDF)
+                    clean_snippet = "".join(
+                        ch for ch in raw_snippet
+                        if ch.isprintable() and ord(ch) < 0x2000
+                    )
+                    snippet    = _html.escape(clean_snippet)
+                    
+                    advice     = _html.escape(str(item.get("advice", "")))
+                    
+                    bkt_pct    = int(item.get("bkt_probability", 0))
+
+                    # Màu thanh tiến trình BKT
+                    if bkt_pct >= 70:
+                        bar_color = "#22c55e"
+                        bkt_label = f"Hiểu bài: {bkt_pct}% ✅"
+                    elif bkt_pct >= 40:
+                        bar_color = "#f59e0b"
+                        bkt_label = f"Cần ôn: {bkt_pct}% ⚠️"
+                    else:
+                        bar_color = "#ef4444"
+                        bkt_label = f"Yếu: {bkt_pct}% 🔴" if bkt_pct > 0 else "Chưa có dữ liệu"
+
+                    st.markdown(f"""
+                    <div style="
+                        background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;
+                        padding:1.2rem 1.5rem;margin-bottom:0.9rem;
+                        box-shadow:0 2px 10px rgba(30,64,175,0.06);
+                        border-left:5px solid #1e40af;
+                    ">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                            <div style="display:flex;align-items:center;gap:0.6rem;">
+                                <span style="
+                                    background:#1e40af;color:#fff;border-radius:50%;
+                                    width:26px;height:26px;display:inline-flex;
+                                    align-items:center;justify-content:center;
+                                    font-size:0.75rem;font-weight:700;flex-shrink:0;
+                                ">{step_idx}</span>
+                                <strong style="color:#0a0a0a;font-size:0.97rem;">{topic}</strong>
+                            </div>
+                            <span style="font-size:0.72rem;color:#6b7280;">{bkt_label}</span>
+                        </div>
+                        <!-- Thanh BKT -->
+                        <div style="height:5px;background:#e5e7eb;border-radius:9999px;margin-bottom:0.8rem;overflow:hidden;">
+                            <div style="height:100%;width:{bkt_pct}%;background:{bar_color};border-radius:9999px;transition:width 0.4s;"></div>
+                        </div>
+                        <!-- Nội dung trích dẫn -->
+                        <div style="
+                            background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;
+                            padding:0.7rem 0.9rem;margin-bottom:0.7rem;
+                            font-size:0.82rem;color:#374151;line-height:1.65;
+                            max-height:100px;overflow:hidden;
+                            display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+                        ">
+                            📖 <em>{snippet[:300]}{"..." if len(snippet) > 300 else ""}</em>
+                        </div>
+                        <!-- Lời khuyên AI -->
+                        <div style="
+                            background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                            padding:0.65rem 0.9rem;font-size:0.85rem;color:#1e40af;font-weight:500;
+                        ">
+                            💡 {advice}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Nút thi lại với nội dung đã ôn
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🚀 Thi Lại Bộ Câu Hỏi Mới (Tập Trung Điểm Yếu)", type="primary", use_container_width=True):
+                    st.session_state.quiz_phase = "setup"
+                    st.session_state.quiz_questions = []
+                    st.session_state.quiz_answered = {}
+                    st.session_state.quiz_score = 0
+                    st.session_state.quiz_index = 0
+                    st.session_state.quiz_wrong_chunks = []
+                    st.session_state.show_learning_path = False
+                    st.session_state.learning_path_data = None
+                    st.rerun()
 
         # Phần xem lại đáp án
         if st.session_state.get("show_review", False):

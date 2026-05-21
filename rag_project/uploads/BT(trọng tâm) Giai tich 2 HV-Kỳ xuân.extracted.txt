@@ -1,0 +1,2892 @@
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        1 
+ 
+BÀI TẬP MÔN GIẢI TÍCH 2 
+ 
+CHƯƠNG I: PHÉP TÍNH VI PHÂN CỦA HÀM SỐ NHIỀU BIẾN 
+ 
+Bài 1: Tính các đạo hàm riêng của các hàm số sau theo các biến: 
+
+
+3
+3
+2
+2
+2
+2
+2
+3
+3
+2
+4 2
+2
+2
+2
+2
+2
+1.
+;
+2.
+ln(
+);
+3.
+arctan
+;
+4.
+2
+5.
+(1
+) ;
+6.
+.arctan
+; 7.
+3
+; 8.
+y
+x
+y
+y
+x
+x
+y
+y
+z
+z
+x
+x
+y
+z
+z
+x
+x
+x
+y
+x
+y
+x
+yz
+z
+xy
+u
+e
+z
+x y
+y x
+e
+u
+x
+y
+z
+y
+x
+x
+z
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+Bài 2: Tính các đạo hàm riêng cấp hai của các hàm số sau: 
+
+
+
+
+
+
+2
+2
+2
+2
+2
+x+y
+1.
+;
+2.
+arctan
+;
+3.
+.
+1-xy
+4.
+os x+2y ;
+5.
+ln
+x y
+x y
+x y
+z
+z
+z
+x
+y e
+x y
+x
+z
+e
+c
+u
+x
+y
+yz
+z
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+Bài 3: 
+a. Cho hàm số u
+x
+y
+
+
+ln
+1
+2
+2   tính 
+2
+2
+2
+2
+u
+u
+A
+x
+y
+
+
+
+
+
+
+  
+b. Cho hàm số 
+2
+2
+ln(
+)
+z
+x
+y
+x
+
+
+. Tính 
+'
+'
+2
+1
+1
+x
+y
+z
+B
+z
+z
+x
+y
+x
+
+
+
+.    
+Bài 4: Tính đạo hàm của các hàm số hợp sau: 
+a) 
+2
+2
+2
+ln[(
+1)
+(
+1) ] ,
+,
+x
+y
+z
+u
+v
+u
+v
+xy
+y
+
+
+
+
+
+
+
+; 
+b) 
+2
+2
+2
+4
+2
+,
+,t
+t
+z
+y
+x
+x
+e
+y
+te
+
+
+
+
+
+  
+Bài 5: Tính đạo hàm các hàm số ẩn sau: 
+a. Cho hàm số 
+( , )
+x
+x y z
+
+là hàm ẩn xác định bởi 
+2
+2
+2
+2
+y
+z
+x
+x
+
+
+
+. Tính 
+( , )
+dx y z . 
+b) 
+4
+2
+ln
+2
+ar cot x
+x
+y
+c
+y
+
+
+ tính 
+'y ; c) 
+3 2
+2
+sin(2
+3
+5 )
+ln(
+2 )
+31
+xy z
+x
+y
+z
+x
+y
+z
+
+
+
+
+
+
+
+ tính 
+' , '
+x
+z
+y
+y
+ 
+Bài 6: Tìm vi phân toàn phần của các hàm số sau: 
+
+
+
+
+2
+2
+2
+(2 )
+2
+2
+1.
+sin
+1 ;
+2.
+lncot
+;
+3.
+cos
+sin
+4.
+arctan
+;
+5.
+2
+;
+6.
+,
+3 ,
+2
+cos
+-
+y
+y
+x
+v
+x
+x
+t
+u
+y
+z
+x
+y
+z
+z
+e
+y
+x
+y
+x
+x
+y
+z
+u
+z
+z
+e dt u
+x
+y v
+x
+y
+x y
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+Bài 7: Tính gần đúng giá trị các biểu thức sau: 
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        2 
+ 
+
+
+
+
+2
+2
+4
+3
+3
+0,02
+2
+3
+1)
+1,02
+0,05
+;
+2) ( 98
+126)
+1,97
+3) arctan
+1 ;
+4) 5.
+(1,03)
+(0,98)
+1,02
+e
+
+
+
+
+
+
+
+
+
+
+
+ 
+5) Cho hàm số ẩn  
+( , )
+z
+f x y
+
+ xác định bởi hệ thức  
+2z
+y
+z
+xe
+
+ tính gần đúng 
+(0,04;0,96)
+f
+. 
+ 
+Bài 8: Tìm cực trị của các hàm hai biến sau: 
+ 
+1. 
+2
+3
+2
+4
+z
+x
+xy
+y
+
+
+
+  
+ 
+2. 
+2
+2
+z = x +xy+y +x-y+2  
+3. 
+2
+2
+3
+2
+3
+2
+3
+z
+x
+x y
+y
+y
+
+
+
+
+  
+4. 
+4
+4
+2
+2
+ 2
+2
+z
+x
+y
+x
+y
+
+
+
+
+ 
+5. 
+3
+2
+3
+4
+24
+1
+z
+y
+x y
+xy
+
+
+
+ 
+2
+3
+2
+3
+2
+3
+2
+3
+2
+3
+6.
+4
+3
+1
+7.
+4
+3
+8.
+6
+21
+9.
+2
+4
+10.
+2
+4
+3
+5
+z
+x
+xy
+y
+y
+z
+y
+xy
+x
+x
+z
+x
+xy
+y
+y
+z
+x
+xy
+y
+y
+z
+x
+xy
+y
+y
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+3
+3
+2
+4
+4
+2
+3
+2
+3
+3
+2
+2
+11.
+9
+3
+12.
+2
+5
+13.
+8
+13
+8
+9
+14.
+4
+7
+15.
+2
+2
+3
+3
+12
+12
+z
+x
+y
+xy
+z
+x
+y
+x
+y
+z
+x
+x
+y
+y
+xy
+z
+x y
+x
+y
+z
+x
+y
+x y
+xy
+x
+y
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Bài 9: Tìm GTLN, GTNN của các hàm số sau: (Thi) 
+        a.  
+2
+2
+4
+8
+z
+x
+xy
+x
+y
+
+
+
+
+ trong miền 
+
+
+
+,
+:  0
+1, 0
+1
+x y
+x
+y
+
+
+
+
+, 
+        b.  
+sin
+sin
+sin(
+)
+z
+x
+y
+x
+y
+
+
+
+
+ trong miền 
+
+,
+:  0
+,  0
+2
+2
+x y
+x
+y
+
+
+
+
+
+
+
+
+
+
+
+
+, 
+       c.  
+
+
+
+2
+2
+2
+2
+2
+3
+x
+y
+z
+e
+x
+y
+
+
+
+
+ trong miền tròn: 
+2
+2
+1.
+x
+y
+
+
+ 
+       d. 
+2
+2
+8
+6
+1
+z
+x
+y
+x
+y
+
+
+
+
+ trong miền 
+
+
+2
+2
+D
+( , ):  
+1
+x y
+x
+y
+
+
+
+.              
+                         
+CHƯƠNG II: TÍCH PHÂN BỘI (Tích phân kép và tích phân bội 3) 
+A. Tích phân kép. 
+Bài 1: Thay đổi thứ tự trong tích phân sau: 
+a) 
+2
+3
+1
+0
+( , )
+y
+dy
+f x y dx
+
+
+ 
+b) 
+2
+1
+1
+0
+1
+( , )
+y
+y
+dy
+f x y dx
+
+
+
+
+
+ 
+c) 
+2
+2
+4
+2
+( , )
+x
+dx
+f x y dy
+
+
+ 
+d) 
+2
+1
+1
+1
+0
+2
+( , )
+y
+y
+dy
+f x y dx
+
+
+
+
+
+ 
+e) 
+2
+2
+1
+( , )
+x
+x
+dx
+f x y dy
+
+
+ 
+f) 
+2
+6
+1
+2
+
+
+
+( , )
+x
+x
+dx
+f x y dy  
+Bài 2:  
+1) Cho 
+2
+2
+2
+2
+0
+2
+( , )
+x x
+x x
+I
+dx
+f x y dy
+
+
+
+
+ 
+                  a.   Thay đổi thứ tự lấy tích phân.  
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        3 
+ 
+                  b.   Tính tích phân với 
+( , )
+f x y
+xy
+
+. 
+2) Cho tích phân 
+2
+2
+1
+1
+1
+0
+( , )
+y
+y
+dy
+f x y dx
+
+
+
+
+
+ 
+                  a.   Thay đổi thứ tự lấy tích phân.  
+                  b.   Tính tích phân với 
+( , )
+f x y
+y
+
+. 
+3) Cho tích phân 
+2
+1
+2
+( , )
+y
+y
+dy
+f x y dx
+
+
+
+ 
+                  a.   Thay đổi thứ tự lấy tích phân.  
+                  b.   Tính tích phân với 
+2
+( , )
+2 .
+f x y
+x
+y
+
+
+ 
+4) Cho tích phân 
+2
+1
+0
+( , )
+x
+x
+dx
+f x y dy
+
+
+
+ 
+                  a.   Thay đổi thứ tự lấy tích phân.  
+                  b.   Tính tích phân với 
+3
+( , )
+.
+f x y
+x
+xy
+
+
+ 
+Bài 3:  
+1) Tính tích phân 
+3
+3
+(
+2 )
+,  
+D
+x
+y x
+I
+dxdy
+y
+
+
+ trong đó D  là miền giới hạn bởi các đường 
+2
+2, 
+, 
+2
+, 
+6
+, 
+0.
+2
+x
+y
+x
+y
+y
+x y
+x x
+
+
+
+
+
+
+
+ 
+2) Tính diện tích  S  miền phẳng D  giới hạn bởi các đường: 
+                            
+2
+2
+1
+3
+, 
+, 
+, 
+.
+2
+y
+x
+y
+x
+y
+y
+x
+x
+
+
+
+
+ 
+Bài 4: Tính các tích phân sau: 
+    1)  
+
+
+2
+2
+(
+)
+,  
+( , )
+2 , 
+D
+I
+y
+x dxdy
+D
+x y x
+y
+y x
+y
+
+
+
+
+
+
+
+ 
+     2)    
+
+
+2
+2
+,  
+( , )
+1, 
+D
+I
+x
+ydxdy
+D
+x y x
+y
+x
+y
+
+
+
+
+
+
+
+
+ 
+Bài 5: Tính các tích phân sau: 
+ 
+      1)     
+
+
+2
+2
+2
+2
+(
+)
+,  
+( , )
+2
+2
+0
+D
+I
+x
+y dxdy
+D
+x y x
+y
+x
+y
+
+
+
+
+
+
+
+
+ 
+       2) 
+
+
+2
+2
+2
+2
+(
+)
+,  
+( , ) 1
+2
+D
+x
+y
+I
+dxdy
+D
+x y
+x
+y
+y
+y
+
+
+
+
+
+
+
+ 
+        3)    
+
+
+2
+2
+2
+2
+ln(
+)
+, 
+( , )1
+4, 
+D
+I
+x
+y
+xy
+y dxdy D
+x y
+x
+y
+y
+x
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+. 
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        4 
+ 
+Bài 6:  
+     1) Tính thể tích của vật thể                    
+
+
+2
+2
+2
+2
+2
+2
+2
+( , )
+, 
+, 0
+V
+x y a
+x
+y
+x
+y
+z
+R
+a
+R
+
+
+
+
+
+
+
+
+. 
+    2)  Tính thể tích của vật thể giới hạn bởi các mặt cong 
+                   
+2
+2
+2
+2
+2
+2
+, 
+2(
+), 
+2
+z
+x
+y
+z
+x
+y
+x
+y
+x
+
+
+
+
+
+
+     
+Bài 7: Tính các tích phân sau: 
+ 
+ 
+1) 
+2
+2
+(
+)
+V
+I
+x
+y
+x
+y dxdydz
+
+
+
+
+
+, V là miền giới hạn bởi các mặt cong 
+2
+2
+2
+2
+2
+, 
+2
+, 
+0, 
+0.
+x
+y
+a
+z
+a
+x
+y
+z
+a
+
+
+
+
+
+
+
+ 
+2) 
+2
+2
+(
+)
+,
+V
+I
+x
+y
+xy dxdydz
+
+
+
+
+V là miền giới hạn bởi các măt cong  
+2
+2
+2
+2
+2
+2
+, 
+2
+(
+), 
+0, 
+0.
+x
+y
+a
+z
+a
+x
+y
+z
+a
+
+
+
+
+
+
+
+ 
+3) 
+2
+(
+)
+,
+V
+I
+x
+y
+z
+dxdydz
+
+
+
+
+ V là miền chứa điểm (0,0, )
+a và giới hạn bởi 
+2
+2
+2
+2
+2
+2
+2
+, 
+, 
+0.
+x
+y
+z
+a
+z
+x
+y
+a
+
+
+
+
+
+
+ 
+4)   
+2
+2
+2
+(
+)
+,
+V
+I
+x
+y
+z dxdydz
+
+
+
+
+V là miền chứa điểm (0,0, )
+a và giới hạn bởi 
+2
+2
+2
+2
+2
+2
+3
+, 2
+, 
+0.
+x
+y
+z
+a
+az
+x
+y
+a
+
+
+
+
+
+
+ 
+ 
+CHƯƠNG III: TÍCH PHÂN ĐƯỜNG – TÍCH PHÂN MẶT 
+A. Tích phân đường. 
+Bài 1: Tính các tích phân đường sau: 
+a. 
+
+(
+)
+AB
+x
+y ds
+
+
+, AB là đoạn thẳng nối 2 điểm A(0;0), 
+
+B 2;1   
+b. 
+L
+xyds, L là biên hình chữ nhật ABCD: A(0; 0);  
+
+B 4;0 ; 
+
+C 4;2 ;  D(0; 2)  
+c. 
+L
+ds
+y
+2
+, L: 
+3
+t
+z
+,
+2
+t
+y
+,t
+x
+3
+2
+
+
+
+;0 
+ t 
+ 1
+
+
+ 
+ 
+Bài 2: Tính các tích phân đường sau: 
+a. 
+
+2
+2
+(
+)
+(
+)
+ABC
+x
+y
+dx
+x
+y
+dy
+
+
+
+
+, ABC là đường gấp khúc A(0, 0), B(2, 2), C(4, 0) 
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        5 
+ 
+b. 
+
+
+L
+2 dy
+)
+x
+y
+(
+ydx
+, L là cung Parabol 
+2
+2
+y
+x
+x
+
+
+ nằm ở trên trục hoành theo 
+chiều kim đồng hồ  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Bài 3: Tính các tích phân đường sau: 
+a. 
+
+
+
+
+
+
+
+
+L
+dy
+)
+2
+x
+y
+(
+dx
+)
+2
+y
+x
+(
+xy
+, L là biên ABC, A(-1; 0), B(1; -2), C(1; 2) 
+b. 
+
+2
+2
+2(
+)
+(4
+3)
+ABC
+x
+y
+dx
+y
+xdy
+
+
+
+
+, ABC là đường gấp khúc nối A(0; 0),B(1;1),C(0; 2) 
+c. 
+(
+)
+(
+)
+;
+L
+I
+xy
+x
+y dx
+xy
+x
+y dy
+
+
+
+
+
+
+
+ 
+3
+3
+(
+)
+(
+)
+4
+4
+L
+x
+y
+J
+x
+y
+dy
+y x
+dx
+
+
+
+
+
+, 
+với L là đường tròn 
+2
+2
+ 2
+x
+y
+x
+
+
+. 
+Bài 4: Tính các tích phân đường sau: 
+1) 
+C
+J
+xdx
+ydy
+
+
+
+  lấy theo chiều tăng của tham số t , biết rằng đường cong  C có 
+phương trình:  
+1
+,  0
+3
+2     
+x
+t
+t
+y
+t
+
+
+
+
+
+
+
+ 
+2) 
+2
+2
+(
+4
+5 )
+(
+2
+)
+2
+C
+x
+J
+xy
+x
+y dx
+y
+x
+dy
+
+
+
+
+
+
+
+  lấy theo chiều  ngược kim đồng hồ, biết 
+đường cong  C có phương trình: 
+2
+2
+4
+x
+y
+
+
+ 
+ 
+3) 
+2
+(
+sin
+sin2 cos )
+(
+os
+sin
+sin )
+x
+x
+L
+I
+e
+y
+x
+y dx
+e c
+y
+x
+y dy
+
+
+
+
+
+với cung L là nửa trên đường 
+tròn 
+2
+2
+2
+x
+y
+x
+
+
+từ O(0,0)đến A(2,0) . 
+ 
+4) 
+3
+2 1
+(
+sin )
+(
+os
+)
+2
+L
+I
+x
+y
+x dy
+y
+c
+x
+y dx
+
+
+
+
+
+ với cung L là nửa trên đường tròn 
+2
+2
+4
+x
+y
+
+
+từ điểm A(2,0) đến điểm B( 2,0)
+
+. 
+ 5)  
+
+2
+3
+2
+3
+(
+cos
+)
+(
+2 sin )
+AB
+I
+y
+x
+y
+x
+dx
+x
+y
+x dy
+
+
+
+
+
+
+ với cung 
+AB  là nửa trên đường tròn 
+2
+2
+4
+x
+y
+
+
+ từ điểm A(2,0) đến điểm B( 2,0)
+
+. 
+ 
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        6 
+ 
+6) 
+
+3
+2
+2
+(
+2 cos
+)
+(2
+3
+sin )
+x
+x
+AB
+I
+x
+x
+y
+y e
+dx
+x
+y e
+x
+y dy
+
+
+
+
+
+
+
+
+
+ với cung 
+AB  xác định bởi 
+2
+2
+4
+0
+x
+y
+y
+
+
+
+
+
+từ điểm A(2,0) đến điểm B( 2,0)
+
+. 
+  7) 
+2
+4
+(
+4 )
+(
+)
+2
+x
+C
+x
+J
+xy
+e
+y dx
+y
+x
+dy
+
+
+
+
+
+
+
+ lấy theo chiều  ngược kim đồng hồ, biết C 
+có phương trình: 
+2
+2
+1.
+x
+y
+
+
+ 
+ 
+B. Tích phân mặt 
+Bài 1: Tính tích phân mặt 
+2
+2
+(
+)
+S
+I
+x
+y dS
+
+
+
+ nếu 
+a. S là mặt nón 
+2
+2
+z
+ x  
+ y , 0 
+ z 
+ 1
+
+
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+b. S là mặt cầu 
+2
+2
+2
+y  
+ z  
+ 4
+x 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+Bài 2: Tính các tích phân mặt sau: 
+a. 
+S
+I
+xyzdxdy
+
+, S là mặt ngoài của hình cầu x2 + y2 + z2 = 1 
+b. 
+S
+zdxdy
+
+, S là mặt ngoài của hình cầu 
+2
+2
+2
+ 
+ 
+ 
+ 9
+x
+y
+z
+
+
+
+ 
+Bài 3: Tính các tích phân mặt sử dụng cụng thức  Ostrogradsky. 
+a. 
+S
+xzdydz
+yxdzdx
+zydxdy
+
+
+
+, S là mặt ngoài của biên hình chóp 0
+, ,
+x y z
+
+và 
+1
+x
+y
+z
+
+
+. 
+b. 
+3
+3
+3
+S
+x dydz
+y dzdx
+z dxdy
+
+
+
+, S là phía ngoài của 
+2
+2
+2
+y  
+ z  
+ 1
+x 
+
+
+. 
+Bài 4: Tính thông lượng  của các trường véc tơ sau: 
+a) 
+3
+3
+3
+( , , )
+F x y z
+x i
+x j
+z k
+
+
+
+
+
+
+
+ qua mặt ngoài của mặt cầu 
+2
+2
+2
+4
+x
+y
+z
+
+
+
+. 
+b) 
+1
+1
+1
+( , , )
+F x y z
+i
+j
+k
+x
+y
+z
+
+
+
+
+
+
+
+ qua mặt ngoài của mặt 
+2
+2
+2
+2
+2
+2
+1
+x
+y
+z
+a
+b
+c
+
+
+. 
+c) 
+( , , )
+2
+F x y z
+xi
+y j
+k
+
+
+
+
+
+
+ theo phía ngoài của phần mặt cầu: 
+2
+2
+2
+2, 
+0
+x
+y
+z
+R
+R
+
+
+
+ 
+nằm trong góc phần tám thứ nhất.    
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        7 
+ 
+ 
+CHƯƠNG IV: PHƯƠNG TRÌNH VI PHÂN 
+Bài 1: Giải các phương trình vi phân sau: 
+2
+,
+'
+'
+2
+4
+3
+2
+)
+cos
+;
+)
+cos(
+)
+cos(
+);
+)
+.
+ln
+1
+4
+13
+y
+y
+y
+a
+y
+x
+b
+y
+x
+y
+x
+y
+c
+y
+y
+x
+x
+x
+
+
+
+
+
+
+
+
+
+
+
+ 
+d.  (x - 2).(y2 - 1)dx - (x + 4)ydy = 0; 
+    e. 
+
+
+2
+2
+1
+4  
+ 
+ 
+. .
+ 
+ 0.
+x
+x
+y
+dx
+e y dy
+
+
+
+
+ 
+Bài 2: Giải các phương trình vi phân tuyến tính cấp 1 sau: 
+a. 
+2
+’
+2
+x
+y
+xy
+xe
+
+
+; 
+b. 
+
+0
+x
+xy e
+dx
+xdy
+
+
+; 
+c.  2ydx + (y2 - 6x)dy = 0 
+d. y’ + tany = 
+y
+x
+cos
+; e. 
+2
+2
+1
+;
+ln
+ln
+'
+e
+e
+x
+y
+x
+x
+x
+x
+y
+y
+
+
+
+
+;  
+f. xy’ + y = ex ,  
+1
+1
+
+x
+y
+ 
+Bai 3: Giải các phương trình vi phân Becnulli sau:  
+2
+4
+1)
+'
+y
+y
+x y
+x
+
+
+; 
+ 
+2
+2)
+(
+)
+0
+ydx
+x
+x y dy
+
+
+
+; 
+ 
+3) 
+3
+3
+' 2
+2
+y
+xy
+x y
+
+
+ 
+4) 
+2
+3
+3
+'
+0
+y y
+y
+x
+
+; 
+5) 
+2
+' 2
+x
+y
+y
+y e
+
+
+;  
+ 
+ 
+6) 
+
+
+2
+1
+'
+x
+y
+y
+y
+
+
+
+ 
+Bài 4: Giải các phương trình vi phân toàn phần sau: 
+       a.  
+2
+(
+1)
+(
+3)
+0
+x
+y
+dx
+x
+y
+dy
+
+
+
+
+
+
+;   
+ 
+b.  
+3
+2
+3
+(1
+ln )
+(2
+)
+0
+x
+x
+y dx
+y
+dy
+y
+
+
+
+
+ ; 
+       c.  
+0
+1
+sin
+cos
+1
+1
+cos
+sin
+1
+2
+2
+2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+dy
+y
+y
+x
+y
+x
+x
+y
+x
+dx
+x
+y
+x
+y
+y
+x
+y
+. 
+Bài 5:  Giải các phương trình sau đây bằng cách tìm thừa số tích phân  
+       a.  (2
+)
+2
+0,  ( )
+y
+xy dx
+xdy
+x
+
+
+
+
+;             b.  (1
+)
+0,  ( )
+y
+xy dx
+xdy
+y
+
+
+
+
+; 
+Bài 6: Giải các phương trình vi phân sau bằng phương pháp Lagrangce: 
+1) 
+1
+''
+y
+y
+x
+
+ 
+2) 
+'' 2 '
+xe
+y
+y
+y
+x
+
+
+
+ 
+3) 
+1
+'' 3 ' 2
+1
+x
+y
+y
+y
+e
+
+
+
+ 
+4) 
+2
+3
+2
+2
+'' 2 '
+x
+x
+y
+y
+y
+x
+
+
+
+
+
+5) 
+1
+'' 4
+os 2
+y
+y
+c
+x
+
+
+ 
+6) 
+'' 4
+2 tan
+y
+y
+x
+
+
+ 
+Bài 7: Giải các phương trình vi phân sau: 
+. ’’
+3 ’
+2
+(
+5)
+x
+a y
+y
+y
+x
+e
+
+
+
+
+; b. 
+
+
+’’
+  
+ 
+ 
+ 7
+x
+y
+y
+e
+x
+
+
+
+; c) 
+4
+'' 9 ' 20
+x
+y
+y
+y
+xe
+
+
+
+ 
+ 
+ 
+
+Giảng viên: Lê Văn Ngọc 
+   Học viện Công nghệ Bưu chính Viễn thông 
+Bài tập môn giải tích 2- Dùng cho các lớp kỳ xuân                                                                        8 
+ 
+Bài 8:  
+1) a.  Tích phân phương trình:  
+/
+sin(
+)
+sin(
+)
+y
+x
+y
+x
+y
+
+
+
+
+  
+    b. Tìm nghiệm tổng quát của phương trình: 
+//
+/
+3
+4
+sin
+y
+y
+y
+x
+x
+
+
+
+
+                     
+ 2) a. Giải bài toán Cauchy:  
+2
+(
+1)
+(
+2)
+0
+(0)
+5
+x y
+dx
+y
+x
+dy
+y
+
+
+
+
+
+
+
+
+  
+     b. Tìm nghiệm tổng quát của phương trình: 
+//
+/
+2
+cos
+y
+y
+x
+x
+
+
+
+                     
+3) a. Giải bài toán Cauchy:  
+2
+cos
+ln
+0
+(0)
+xdy
+y
+ydx
+y
+e
+
+
+
+
+
+
+  
+    b.Tìm nghiệm tổng quát của phương trình: 
+//
+cot
+y
+y
+x
+x
+
+
+
+.                     
+4) a.  Giải phương trình vi phân: 
+
+0
+x
+xy e
+dx
+xdy
+
+
+. 
+    b.  Tìm nghiệm tổng quát của phương trình: 
+//
+/
+2
+1
+x
+y
+y
+y
+xe
+
+
+
+                     
+5) a.   Giải bài toán Cauchy:  
+4
+(
+)
+0
+(0)
+3
+ydx
+y
+x dy
+y
+
+
+
+
+
+
+
+ 
+    b.  Tìm nghiệm tổng quát của phương trình: 
+//
+/
+2
+3
+cos
+x
+y
+y
+y
+x
+e
+x
+
+
+
+
+                     
+6) a.  Giải phương trình vi phân:  
+2
+' 2
+x
+y
+y
+y e
+
+
+. 
+    b.  Tìm nghiệm tổng quát của phương trình:
+//
+/
+2
+.
+x
+x
+y
+y
+y
+e
+e
+
+
+
+
+                     
+ 
+7) a. Tích phân phương trình sau bằng cách tìm thừa số tích phân 
+              
+3
+2
+2
+2
+(2
+)
+(
+1)
+0.
+3
+y
+xy
+x y
+y
+dx
+x
+y
+dy
+
+
+
+
+
+
+
+ 
+     b.  Tìm nghiệm tổng quát của phương trình: 
+//
+/
+2
+.
+x
+e
+y
+y
+y
+x
+x
+
+
+
+
+
+                     
+8) a.  Tích phân phương trình sau bằng cách tìm thừa số tích phân 
+                     
+2
+(
+1)
+(
+)
+0.
+y xy
+dx
+y
+x dy
+
+
+
+
+ 
+     b. Tìm nghiệm tổng quát của phương trình: 
+//
+/
+2
+xe
+y
+y
+y
+x
+x
+
+
+
+
+                     
+ 
+GOODLUCK TO YOU! 

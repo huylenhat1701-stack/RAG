@@ -28,13 +28,14 @@ from ..services.document_service import (
     process_and_index_document,
     get_document_content,
 )
-from ..services.rag_service import answer_question, summarize_document, generate_exercise, generate_quiz
+from ..services.rag_service import answer_question, summarize_document, generate_exercise, generate_quiz, generate_learning_path
 from ..models.schemas import (
     DocumentResponse, DocumentListResponse,
     DocumentContentResponse, DocumentSummaryResponse,
     AskRequest, AskResponse,
     ExerciseRequest, ExerciseResponse,
-    QuizRequest, QuizResponse,
+    QuizRequest, QuizResponse, QuizSubmitRequest, QuizSubmitResponse,
+    LearningPathRequest, LearningPathResponse,
     ChatHistoryResponse, ChatHistoryListResponse,
     MessageResponse,
 )
@@ -286,6 +287,58 @@ def create_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo quiz: {str(e)}")
 
+
+@router.post(
+    "/documents/{doc_id}/quiz/submit",
+    response_model=QuizSubmitResponse,
+    summary="Nộp kết quả câu hỏi trắc nghiệm để cập nhật Adaptive Tutor (BKT)",
+    tags=["Tài liệu"],
+)
+def submit_quiz_result(
+    doc_id: int,
+    request: QuizSubmitRequest,
+    db: Session = Depends(get_db),
+):
+    """Cập nhật xác suất hiểu bài của người dùng dựa trên kết quả trả lời."""
+    from ..services.adaptive_tutor_service import adaptive_tutor_service
+    try:
+        new_prob = adaptive_tutor_service.update_knowledge(
+            session_id=request.session_id,
+            doc_id=doc_id,
+            chunk_id=request.chunk_id,
+            is_correct=1 if request.is_correct else 0,
+            db=db
+        )
+        return QuizSubmitResponse(success=True, new_probability=new_prob)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi cập nhật BKT: {str(e)}")
+
+@router.post(
+    "/documents/{doc_id}/learning-path",
+    response_model=LearningPathResponse,
+    summary="Tạo lộ trình học tập cá nhân hóa",
+    description="Dựa trên câu trả lời sai và dữ liệu BKT, AI tạo lộ trình ôn tập phù hợp.",
+    tags=["Tài liệu"],
+)
+def create_learning_path(
+    doc_id: int,
+    request: LearningPathRequest,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """Tạo lộ trình học tập cá nhân hóa sau khi người dùng hoàn thành quiz."""
+    try:
+        return generate_learning_path(
+            doc_id=doc_id,
+            session_id=request.session_id,
+            wrong_chunk_ids=request.wrong_chunk_ids,
+            db=db,
+            llm_service=llm_service,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo lộ trình: {str(e)}")
 
 # ============================================================
 # CHAT / Q&A ENDPOINTS
