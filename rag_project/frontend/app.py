@@ -1319,6 +1319,27 @@ st.markdown("""
 
 
 # ============================================================
+# Main Tabs
+# ============================================================
+(
+    tab_docs,
+    tab_read,
+    tab_summary,
+    tab_exercise,
+    tab_chat,
+    tab_history,
+    tab_evaluate,
+) = st.tabs([
+    "📁 Tài Liệu",
+    "📖 Đọc Nội Dung",
+    "✨ Tóm Tắt",
+    "🏆 Trắc Nghiệm",
+    "💬 Hỏi & Đáp",
+    "📜 Lịch Sử",
+    "📊 Đánh Giá",
+])
+
+# ============================================================
 
 # TAB 1: Quản lý tài liệu
 # ============================================================
@@ -2444,15 +2465,14 @@ with tab_evaluate:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Ket qua CSV neu da chay
-    import os as _os
     csv_files = {
         "RAG Q&A": "evaluation_rag.csv",
         "BKT Chi Tiet": "evaluation_bkt.csv",
         "Quiz": "evaluation_quiz.csv",
     }
     for label, fname in csv_files.items():
-        fpath = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), fname)
-        if _os.path.exists(fpath):
+        fpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), fname)
+        if os.path.exists(fpath):
             with open(fpath, "r", encoding="utf-8-sig") as f_csv:
                 csv_content = f_csv.read()
             st.download_button(

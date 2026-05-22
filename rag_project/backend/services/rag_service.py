@@ -3,6 +3,8 @@ RAG Service - Điều phối luồng Hỏi & Đáp và Tóm tắt tài liệu
 Full-Context Edition: tự động chọn chế độ đọc toàn bộ hoặc RAG tùy độ dài tài liệu.
 """
 
+import json
+import re
 from pathlib import Path
 from typing import List
 from sqlalchemy.orm import Session
@@ -256,7 +258,6 @@ def summarize_document(
             prompt=final_prompt,
             system_prompt="Tổng hợp và tóm tắt lại bằng tiếng Việt, đầy đủ, có bullet points."
         )
-    ##
     doc_repo.update_summary(doc_id, summary)
 
     return DocumentSummaryResponse(
@@ -490,8 +491,6 @@ def _clean_ai_preamble(raw: str) -> str:
     - Markdown bold: **text**
     - Câu giới thiệu trước block câu hỏi đầu tiên
     """
-    import re
-
     lines = raw.splitlines()
     result_lines = []
     found_first_question = False
@@ -529,7 +528,6 @@ def _clean_question_text(text: str) -> str:
     - Xóa markdown bold/italic
     - Strip khoảng trắng thừa
     """
-    import re
     text = re.sub(r'^(?:Câu\s*\d+[:\.\s]+|Question\s*\d+[:\.\s]+)', '', text.strip(), flags=re.IGNORECASE)
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'\*(.+?)\*', r'\1', text)
@@ -539,8 +537,6 @@ def _clean_question_text(text: str) -> str:
 
 def _try_parse_json(raw: str) -> list:
     """Thử parse JSON từ response. Trả None nếu thất bại."""
-    import json, re
-
     raw = raw.strip()
 
     # Thử parse thẳng
@@ -578,8 +574,6 @@ def _parse_text_format(raw: str, start_index: int) -> list:
     Đáp án: A
     Giải thích: ...
     """
-    import re
-
     questions = []
     # Tách theo "Câu N:" hoặc "**Câu N**" hoặc "Question N:"
     blocks = re.split(
@@ -653,8 +647,6 @@ def _parse_text_format(raw: str, start_index: int) -> list:
 
 def _parse_numbered_fallback(raw: str, start_index: int) -> list:
     """Fallback cuối: tìm bất kỳ cấu trúc hỏi-đáp nào trong text."""
-    import re
-
     questions = []
     # Tìm các dòng chứa A. B. C. D. liên tiếp
     lines = raw.split('\n')
@@ -741,8 +733,6 @@ def generate_learning_path(
     - Goi AI 1 lan, yeu cau tra ve JSON Array co hanh dong cu the
     - Parse JSON, map lai chunk_meta, fallback neu AI loi
     """
-    import json
-    import re as _re
     from ..services.adaptive_tutor_service import adaptive_tutor_service
     from ..models.domain import UserKnowledge
 
@@ -858,7 +848,7 @@ def generate_learning_path(
                 r'\[\s*\{.*?\}\s*\]',
                 r'```(?:json)?\s*(\[.*?\])\s*```',
             ]:
-                m = _re.search(pat, raw, _re.DOTALL)
+                m = re.search(pat, raw, re.DOTALL)
                 if m:
                     try:
                         parsed = json.loads(m.group(1) if m.lastindex else m.group())

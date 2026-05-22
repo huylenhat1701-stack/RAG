@@ -413,6 +413,7 @@ class LLMService:
                 filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
             ))
         return chunks
+
     # ------------------------------------------------------------------
     # Generation — Full-Context Mode (ưu tiên) & RAG Mode (fallback)
     # ------------------------------------------------------------------

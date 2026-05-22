@@ -11,7 +11,8 @@ DELETE /chat/history         - Xóa lịch sử
 GET  /health                 - Kiểm tra trạng thái (public)
 """
 
-import threading
+import json
+import math
 from pathlib import Path
 from typing import List
 
@@ -498,7 +499,6 @@ def get_bkt_stats(db: Session = Depends(get_db)):
     - Accuracy du doan cua thuat toan BKT
     - Ty le dung/sai theo tung muc BKT
     """
-    import math
     from ..models.domain import QuizHistory, UserKnowledge
 
     BKT_P_SLIP = 0.1
@@ -614,8 +614,7 @@ def get_rag_stats(db: Session = Depends(get_db)):
     multi_source = 0
     for h in histories:
         try:
-            import json as _json
-            srcs = _json.loads(h.sources_json) if h.sources_json else []
+            srcs = json.loads(h.sources_json) if h.sources_json else []
             if len(srcs) > 1:
                 multi_source += 1
         except Exception:
