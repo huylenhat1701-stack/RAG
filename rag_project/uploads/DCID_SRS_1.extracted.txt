@@ -1,0 +1,71 @@
+MUC LUC
+1. GIOI THIEU (INTRODUCTION)
+1.1 Muc dich
+Tai lieu nay dac ta cac yeu cau phan mem cho du an Cong Dan So (DCID Platform). Tai lieu cung cap cai nhin chi tiet ve cac tinh nang chuc nang, phi chuc nang va giao dien he thong cho doi ngu phat trien, kiem thu va cac ben lien quan.
+1.2 Pham vi he thong
+He thong la mot nen tang dich vu cong truc tuyen da nen tang (Two-sided Platform) ket noi nguoi dan va co quan nha nuoc. He thong bao gom hai cong chinh:
+Citizen Portal: Cho phep nguoi dan nop, theo doi ho so hanh chinh truc tuyen.
+Officer Portal: Cho phep can bo tiep nhan, xet duyet va quan ly ho so.
+1.3 Thuat ngu & Viet tat
+2. MO TA TONG QUAN (OVERALL DESCRIPTION)
+2.1 Cac nhom nguoi dung (User Classes)
+He thong DCID phuc vu 4 nhom nguoi dung chinh, moi nhom co vai tro va quyen han rieng biet:
+2.2 Moi truong van hanh
+Server-side
+Jakarta EE 10 - Nen tang backend chinh
+PostgreSQL - Co so du lieu quan he chinh
+Apache Kafka - He thong messaging bat dong bo
+Redis - Cache va luu tru metadata
+Elasticsearch - Tim kiem full-text
+MinIO - Luu tru file va tai lieu dinh kem
+Client-side
+Trinh duyet web hien dai: Google Chrome, Microsoft Edge, Mozilla Firefox
+Ung dung di dong: Android va iOS (React Native)
+Infrastructure
+Deploy qua Docker Compose tren Linux VPS
+Bao mat HTTPS/SSL cho toan bo ket noi
+3. CAC TINH NANG HE THONG (SYSTEM FEATURES)
+3.1 Nhom tinh nang danh cho Cong dan (Citizen Portal)
+3.2 Nhom tinh nang danh cho Can bo (Officer Portal)
+3.3 Nhom tinh nang he thong (System & Integration)
+4. YEU CAU GIAO DIEN BEN NGOAI (EXTERNAL INTERFACE REQUIREMENTS)
+4.1 Giao dien nguoi dung (User Interfaces)
+Thiet ke dap ung (Responsive Design) cho ca Web va Mobile.
+Dong bo hoa giao dien giua React Web va React Native thong qua RESTful API chung.
+Tuan thu cac tieu chuan WCAG 2.1 ve kha nang tiep can (Accessibility).
+4.2 Giao dien phan mem (Software Interfaces)
+5. CAC YEU CAU PHI CHUC NANG (NON-FUNCTIONAL REQUIREMENTS)
+5.1 Hieu nang (Performance)
+Thoi gian phan hoi API trung binh < 200ms cho cac truy van thong thuong.
+Ho tro it nhat 100 nguoi dung dong thoi tren cau hinh VPS tieu chuan.
+He thong WebSocket dam bao do tre cap nhat trang thai ho so < 1 giay.
+5.2 Bao mat (Security)
+Ma hoa du lieu nhay cam trong co so du lieu (AES-256 hoac tuong duong).
+Su dung HTTPS/TLS 1.2+ cho toan bo cac ket noi ngoai vi.
+Co che phan quyen chat che (RBAC) duoc quan ly tap trung tai IAM (Keycloak).
+Xac thuc 2 lop (2FA/TOTP) bat buoc doi voi tai khoan Can bo va Admin.
+Quet lo hong bao mat dinh ky (OWASP Top 10).
+5.3 Tinh san sang (Availability)
+He thong giam sat (Prometheus & Grafana) canh bao tuc thoi khi co su co tai cac service (Kafka, DB, Backend).
+Muc tieu uptime >= 99.5% theo thang.
+Co che tu dong khoi phuc (auto-restart) khi container bi loi qua Docker health check.
+5.4 Kha nang bao tri (Maintainability)
+Ma nguon tuan thu cac quy tac Clean Code va duoc kiem tra boi unit test.
+Tai lieu API duoc tao tu dong tu OpenAPI/Swagger.
+Trien khai CI/CD de tu dong hoa qua trinh build, test va deploy.
+6. CO SO DU LIEU & LUU TRU (DATABASE DESIGN)
+6.1 Chien luoc luu tru
+He thong su dung mo hinh luu tru da tang (Polyglot Persistence), moi thanh phan duoc toi uu cho muc dich cu the:
+6.2 Cac thuc the chinh (Core Entities)
+User: Thong tin tai khoan, vai tro va quyen han (lien ket voi Keycloak).
+Application: Ho so hanh chinh, loai thu tuc, trang thai hien tai.
+StatusHistory: Lich su thay doi trang thai ho so (audit trail).
+Procedure: Cau hinh JSON Schema cho moi loai thu tuc hanh chinh.
+Attachment: Thong tin file dinh kem, duong dan MinIO, hash kiem tra toan ven.
+Notification: Lich su thong bao da gui qua cac kenh Email va FCM.
+6.3 Nguyen tac thiet ke CSDL
+Ap dung chuan hoa du lieu (3NF) cho PostgreSQL.
+Moi bang chinh deu co truong created_at, updated_at va soft-delete (deleted_at).
+Du lieu nhay cam (so CMND, so dien thoai) duoc ma hoa truoc khi luu.
+Chinh sach backup: full backup hang ngay, incremental backup moi 6 gio.
+PHU LUC: LICH SU THAY DOI TAI LIEU
