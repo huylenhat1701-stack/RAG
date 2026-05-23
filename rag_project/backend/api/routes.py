@@ -117,7 +117,9 @@ async def upload_document(
 
     background_tasks.add_task(_process)
 
-    return doc
+    # Return Pydantic schema explicitly to avoid DetachedInstanceError
+    # (SQLAlchemy session closes before FastAPI serializes the ORM object)
+    return DocumentResponse.model_validate(doc)
 
 
 @router.get(

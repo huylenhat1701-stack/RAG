@@ -1077,7 +1077,11 @@ def api_post(endpoint: str, json_data: dict = None, files=None):
         if resp.status_code == 401:
             do_logout()
             return None, "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."
-        return None, f"Lỗi {resp.status_code}: {resp.json().get('detail', resp.text)}"
+        try:
+            detail = resp.json().get('detail', resp.text)
+        except Exception:
+            detail = resp.text
+        return None, f"Lỗi {resp.status_code}: {detail}"
     except requests.ConnectionError:
         return None, "Không kết nối được Backend."
     except requests.Timeout:

@@ -3,9 +3,11 @@ FastAPI Main Application
 Khởi tạo ứng dụng, đăng ký routes và lifecycle events.
 """
 
+import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .db.database import init_db, SessionLocal
 from .api.routes import router
@@ -71,6 +73,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Log toàn bộ traceback khi có unhandled exception."""
+    tb = traceback.format_exc()
+    print(f"[UNHANDLED ERROR] {request.method} {request.url}")
+    print(tb)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "traceback": tb[-1000:]},
+    )
 
 # Đăng ký tất cả routes
 app.include_router(router, prefix="/api/v1")
