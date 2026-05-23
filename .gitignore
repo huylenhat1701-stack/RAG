@@ -208,3 +208,9 @@ __marimo__/
 
 
 .sqlite3
+
+*.pdf
+*.txt
+*.docx
+*.md
+.sqlite3
