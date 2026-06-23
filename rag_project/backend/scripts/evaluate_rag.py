@@ -239,7 +239,7 @@ def run_rag_evaluation():
                 print("[CANH BAO] Context Precision thap - Nen tang top_k hoac chunk size.")
 
         # Luu CSV
-        out_file = PROJECT_ROOT / "rag_project" / "evaluation_rag.csv"
+        out_file = PROJECT_ROOT / "evaluation_rag.csv"
         with open(out_file, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=results[0].keys())
             writer.writeheader()

@@ -1,0 +1,12 @@
+﻿question,answer_preview,mode,faithfulness,relevancy,context_precision,overall,status,reasoning
+Thiết kế hướng đối tượng tập trung vào việc xác định điều gì phải thực hiện và cách thực hiện hành động như thế nào?,"Dựa trên nội dung tài liệu được cung cấp, thiết kế hướng đối tượng tập trung vào việc xác định **cái gì phải thực hiện** (WHAT) và **xác định cách thự",rag,5,5,5,5.0,DAT,"Cau tra loi trung tam vao thong tin trong phan tu van, dung dan va chi tiet."
+Doan văn này đề cập đến nội dung gì?,"Doan văn này đề cập đến các chủ đề sau:
+
+1.  **Quá trình kiểm thử phần mềm:** Tài liệu bao gồm các phương pháp và kỹ thuật kiểm thử khác nhau, bao gồm",rag,5,5,5,5.0,DAT,Dap an dung diem va hoan toan phu hop voi nguon tai lieu. Dap an danh sach chinh xac cac chu de duoc thong tin trong doan van.
+Mục tiêu chính của môn Công nghệ phần mềm là gì?,Mục tiêu chính của môn Công nghệ phần mềm là cung cấp cho sinh viên những kiến thức cơ bản về tất cả mọi hoạt động liên quan đến phát triển phần mềm v,rag,5,5,5,5.0,DAT,"Dap an dung diem tin caug, phu hop voi tat ca cac nguon du lieu cung cap."
+Doan văn này đề cập đến những yếu tố nào trong thiết kế?,"Dựa trên các đoạn văn được cung cấp, doan văn này đề cập đến nhiều yếu tố quan trọng trong quá trình thiết kế phần mềm, bao gồm:
+
+1.  **Các thước đo c",rag,4,5,5,4.67,DAT,Cau tra loi danh gia chinh xac cac yeu to trong thiet ke duoc de tai trong nguon van ban. Cac tieu chi diem danh bang so tu 1-5 phan biet ro muc do khoi qua.
+Chương 10 và 11 của tài liệu tập trung vào những hoạt động nào liên quan đến phần mềm hướng đối tượng?,"Chương 10 và 11 của tài liệu tập trung vào các hoạt động sau liên quan đến phần mềm hướng đối tượng:
+
+*   **Chương 10: Cài đặt và tích hợp:** Chương n",rag,4,5,5,4.67,DAT,Dap an dung diem tin trong thong tin tren de tai va phan loai duoc cac hoat dong chinh cua hai chuong.

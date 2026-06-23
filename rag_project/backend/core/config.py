@@ -46,7 +46,8 @@ FULL_CONTEXT_THRESHOLD_CHARS: int = int(os.getenv("FULL_CONTEXT_THRESHOLD_CHARS"
 # ============================================================
 # Cấu hình ChromaDB & Embedding (chạy offline hoàn toàn)
 # ============================================================
-EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "intfloat/multilingual-e5-small")
+NLI_MODEL_NAME: str = os.getenv("NLI_MODEL_NAME", "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7")
 
 # ============================================================
 # Cấu hình lưu trữ file
@@ -67,6 +68,18 @@ CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "600"))       # 600 từ ≈ 1 trang A4
 CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "80"))  # Overlap lớn hơn = ít mất đoạn chuyển tiếp
 TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "15"))  # Lấy nhiều chunks hơn khi dùng RAG mode
+
+# ============================================================
+# Relevance Thresholds cho RAG Q&A
+# Score = 1.0 / (1.0 + L2_distance), dao động 0–1 (cao = liên quan hơn)
+# Cần đo thực nghiệm để hiệu chỉnh chính xác, giá trị dưới là tạm thời.
+# ============================================================
+# Lọc chunks có score thấp hơn ngưỡng này trước khi đưa vào context LLM
+RELEVANCE_THRESHOLD: float = float(os.getenv("RELEVANCE_THRESHOLD", "0.5"))
+
+# Nếu max score của mọi chunk thấp hơn ngưỡng này → không có thông tin liên quan
+# → trả fallback thay vì gọi LLM generate (tiết kiệm thời gian + tránh hallucination)
+NO_CONTEXT_THRESHOLD: float = float(os.getenv("NO_CONTEXT_THRESHOLD", "0.4"))
 
 # ============================================================
 # System Prompt cho RAG — Yêu cầu AI đọc kỹ, trả lời đầy đủ

@@ -1101,66 +1101,205 @@ section[data-testid="stSidebar"] hr { border-color: var(--border) !important; }
 """, unsafe_allow_html=True)
 
 
+# ============================================================
+# KaTeX injection — render toán học trong Streamlit
+# ============================================================
+st.markdown("""
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css"
+      crossorigin="anonymous">
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"
+        crossorigin="anonymous"></script>
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"
+        crossorigin="anonymous"
+        onload="renderMathInElement(document.body, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\\\(', right: '\\\\)', display: false},
+                {left: '\\\\[', right: '\\\\]', display: true}
+            ],
+            throwOnError: false
+        });"></script>
+""", unsafe_allow_html=True)
+
 
 # ============================================================
-# Helper: Chuẩn bị nội dung cho Streamlit (chuyển đổi toán học thô sang LaTeX)
+# Helper: render nội dung AI với font toán học / thuật toán
 # ============================================================
 import re as _re
 
-def format_content_for_streamlit(text: str) -> str:
+def _highlight_algo_line(line: str) -> str:
+    """Tô màu keyword thuật toán cơ bản cho pseudocode."""
+    keywords = [
+        'Algorithm', 'Input', 'Output', 'Procedure', 'Function',
+        'for', 'foreach', 'while', 'do', 'if', 'else', 'elif',
+        'then', 'end', 'return', 'break', 'continue', 'begin',
+        'repeat', 'until', 'and', 'or', 'not', 'in', 'to', 'step',
+    ]
+    # Escape HTML trước
+    import html as _h
+    line = _h.escape(line)
+    # Comment (// hoặc #)
+    line = _re.sub(r'(//.*|#.*)$', r'<span class="cmt">\1</span>', line)
+    # Numbers
+    line = _re.sub(r'\b(\d+(\.\d+)?)\b', r'<span class="num">\1</span>', line)
+    # Keywords (whole word, case-sensitive)
+    for kw in keywords:
+        line = _re.sub(rf'(?<![\w])({_re.escape(kw)})(?![\w])',
+                       r'<span class="kw">\1</span>', line)
+    return line
+
+
+def render_math_content(text: str) -> str:
     """
-    Streamlit hỗ trợ sẵn KaTeX (toán học) cho các khối markdown.
-    Tuy nhiên các mô hình AI nhỏ thường sinh ra dạng text thuần (như 2/3, x^2).
-    Hàm này giúp bắt các mẫu đó và bọc lại bằng LaTeX ($...$) để Streamlit hiển thị đẹp.
+    Nhận text từ AI, trả về HTML có:
+    - Font toán học (KaTeX) cho $...$ và $$...$$
+    - Font monospace đẹp cho block code/pseudocode
+    - Nhận diện và tô màu thuật toán pseudocode
     """
     if not text:
         return ""
-        
+
+    import html as _h
+
+    # Ký hiệu nhận diện nội dung toán học / thuật toán
+    MATH_PATTERNS = [
+        r'\$[^$]+\$',           # inline math $...$
+        r'\$\$[\s\S]+?\$\$',    # block math $$...$$
+        r'\\[\(\)\[\]]',         # \( \) \[ \]
+        r'\\frac|\\sum|\\int|\\lim|\\sqrt|\\alpha|\\beta|\\theta|\\sigma|\\mu|\\pi|\\infty|\\partial',
+        r'O\(n[\^\s]|O\(log|O\(1\)|\\Theta\(|\\Omega\(',  # Big-O notation
+    ]
+    ALGO_MARKERS = [
+        r'\b(Algorithm|Procedure|function|pseudocode|for i =|while.*do|if.*then|return |Input:|Output:)',
+        r'^\s*(\d+\.|Step \d|[A-Z]+:)',
+    ]
+
+    has_math = any(_re.search(p, text) for p in MATH_PATTERNS)
+    has_algo = any(_re.search(p, text, _re.IGNORECASE | _re.MULTILINE) for p in ALGO_MARKERS)
+
+    lines = text.split('\n')
+    html_parts = []
+    in_code_block = False
+    code_lang = ''
+    code_lines = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        # Phát hiện ``` code block
+        fence_match = _re.match(r'^```(\w*)', line)
+        if fence_match and not in_code_block:
+            in_code_block = True
+            code_lang = fence_match.group(1).lower()
+            code_lines = []
+            i += 1
+            continue
+        if line.strip() == '```' and in_code_block:
+            in_code_block = False
+            # Xác định loại block
+            is_algo_block = code_lang in ('', 'pseudo', 'algorithm', 'pseudocode') or \
+                any(_re.search(p, '\n'.join(code_lines), _re.IGNORECASE) for p in ALGO_MARKERS)
+            if is_algo_block and (has_algo or has_math):
+                label = 'ALGORITHM' if code_lang in ('', 'pseudo', 'algorithm', 'pseudocode') else code_lang.upper()
+                highlighted = '\n'.join(_highlight_algo_line(cl) for cl in code_lines)
+                html_parts.append(
+                    f'<div class="algo-block"><span class="algo-label">{label}</span>{highlighted}</div>'
+                )
+            else:
+                # code block bình thường
+                escaped = _h.escape('\n'.join(code_lines))
+                html_parts.append(
+                    f'<pre style="background:#1e293b;color:#e2e8f0;border-radius:8px;'
+                    f'padding:0.9rem 1.1rem;font-family:\'JetBrains Mono\',monospace;'
+                    f'font-size:0.82rem;overflow-x:auto;">'
+                    f'<code>{escaped}</code></pre>'
+                )
+            i += 1
+            continue
+        if in_code_block:
+            code_lines.append(line)
+            i += 1
+            continue
+
+        # Block math $$...$$
+        if line.strip().startswith('$$') and line.strip().endswith('$$') and len(line.strip()) > 4:
+            math_inner = line.strip()[2:-2]
+            html_parts.append(f'<div class="math-block">$${math_inner}$$</div>')
+            i += 1
+            continue
+
+        # Heading (##, ###)
+        h3 = _re.match(r'^### (.+)', line)
+        h2 = _re.match(r'^## (.+)', line)
+        h1 = _re.match(r'^# (.+)', line)
+        if h3:
+            html_parts.append(f'<h4 style="font-family:\'Inter\',sans-serif;color:#1e40af;font-size:0.92rem;font-weight:700;margin:1rem 0 0.3rem;letter-spacing:-0.01em;">{_h.escape(h3.group(1))}</h4>')
+            i += 1
+            continue
+        if h2:
+            html_parts.append(f'<h3 style="font-family:\'Inter\',sans-serif;color:#0a0a0a;font-size:1rem;font-weight:700;margin:1.2rem 0 0.35rem;border-bottom:1px solid #e5e7eb;padding-bottom:0.3rem;">{_h.escape(h2.group(1))}</h3>')
+            i += 1
+            continue
+        if h1:
+            html_parts.append(f'<h2 style="font-family:\'Inter\',sans-serif;color:#0a0a0a;font-size:1.15rem;font-weight:800;margin:1.4rem 0 0.4rem;">{_h.escape(h1.group(1))}</h2>')
+            i += 1
+            continue
+
+        # Bullet list
+        bullet = _re.match(r'^(\s*)([-*+]|\d+\.) (.+)', line)
+        if bullet:
+            indent = len(bullet.group(1)) // 2
+            content = bullet.group(3)
+            # Process inline math trong bullet
+            content = _process_inline(content)
+            ml = 1.5 * indent
+            html_parts.append(f'<div style="margin-left:{ml}rem;margin-bottom:0.2rem;">{'•' if not _re.match(r'\d+\.', bullet.group(2)) else bullet.group(2)} {content}</div>')
+            i += 1
+            continue
+
+        # Dòng rỗng → xuống hàng
+        if not line.strip():
+            html_parts.append('<br>')
+            i += 1
+            continue
+
+        # Dòng bình thường — xử lý inline math + bold
+        processed = _process_inline(line)
+        html_parts.append(f'<span style="display:block;margin-bottom:0.15rem;">{processed}</span>')
+        i += 1
+
+    font_style = ''
+    if has_math or has_algo:
+        font_style = 'font-family:\'Noto Serif\',serif;line-height:2.0;'
+
+    return f'<div class="math-content-block" style="{font_style}">{" ".join(html_parts)}</div>'
+
+
+def _process_inline(text: str) -> str:
+    """Xử lý inline: **bold**, *italic*, `code`, $math$."""
+    import html as _h
+    # Escape HTML nhưng giữ lại $ cho KaTeX
+    # Không escape $ để KaTeX auto-render hoạt động
     result = text
-    
-    # Chuyển đổi phân số 2/3 -> $\frac{2}{3}$
+    # **bold**
+    result = _re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{_h.escape(m.group(1))}</strong>', result)
+    # *italic*
+    result = _re.sub(r'(?<!\*)\*([^*]+?)\*(?!\*)', lambda m: f'<em>{_h.escape(m.group(1))}</em>', result)
+    # `code`
     result = _re.sub(
-        r'(?<![:/a-zA-Z\d])(\d{1,4})/(\d{1,4})(?![:/\d])',
-        r'$\\frac{\1}{\2}$',
+        r'`([^`]+)`',
+        lambda m: f'<code style="font-family:\'JetBrains Mono\',monospace;background:#f1f5f9;'
+                  f'color:#1e40af;padding:0.1em 0.35em;border-radius:4px;font-size:0.85em;">'
+                  f'{_h.escape(m.group(1))}</code>',
         result
     )
-    
-    # Chuyển đổi luỹ thừa x^2 -> $x^2$ (né các biểu thức đã có dấu ngoặc nhọn hoặc đã nằm trong math block)
-    # Lưu ý: để an toàn tránh phá vỡ code, chỉ bắt dạng đơn giản
-    result = _re.sub(
-        r'([a-zA-Z\d])\^(\d+|[a-zA-Z])',
-        r'$\1^{\2}$',
-        result
-    )
-
-    # Chuyển đổi căn bậc hai: sqrt(x) -> $\sqrt{x}$
-    result = _re.sub(
-        r'\bsqrt\(([^)]+)\)',
-        r'$\\sqrt{\1}$',
-        result
-    )
-
-    # Khắc phục lỗi LLM hay bỏ công thức LaTeX vào trong backticks (inline code `...`)
-    # Streamlit sẽ hiển thị inline code thành chữ màu đỏ thô. Ta cần đổi backticks thành $
-    def fix_backticks_math(match):
-        content = match.group(1)
-        # Nếu bên trong backticks có các ký hiệu đặc trưng của Toán / LaTeX
-        if any(c in content for c in ['\\', '^', '_', '{', '}']) or 'frac' in content or 'partial' in content:
-            return f"${content}$"
-        return f"`{content}`"
-
-    result = _re.sub(r'`([^`\n]+)`', fix_backticks_math, result)
-
-    # Khắc phục lỗi thiếu dấu cách của LLM: \partialx -> \partial x
-    result = result.replace(r'\partialx', r'\partial x')
-    result = result.replace(r'\partialy', r'\partial y')
-    result = result.replace(r'\partialz', r'\partial z')
-
-    # Chuyển đổi các ký tự so sánh
-    result = result.replace(' <= ', ' $\\leq$ ')
-    result = result.replace(' >= ', ' $\\geq$ ')
-    result = result.replace(' != ', ' $\\neq$ ')
-    
+    # Inline math $...$ — giữ nguyên cho KaTeX auto-render
+    # (không escape $ để KaTeX xử lý)
     return result
 
 
@@ -2071,17 +2210,12 @@ with tab_exercise:
                 st.info("Không tìm thấy nội dung cụ thể để tạo lộ trình. Hãy thử làm thêm câu hỏi!")
             else:
                 import re
-                def format_content_for_streamlit(text):
-                    # Chuyển đổi phân số dạng "a/b" thành LaTeX nếu cần
-                    # Regex tìm phân số đơn giản (ví dụ: 1/2, 3/4) không kèm theo ký tự số khác
-                    text = re.sub(r'(?<!\d)(\d+)/(\d+)(?!\d)', r'\\frac{\1}{\2}', text)
-                    return text
-
                 for step_idx, item in enumerate(lp_items, 1):
                     topic      = _html.escape(str(item.get("topic", f"Chủ đề {step_idx}")))
                     
                     raw_snippet = str(item.get("content_snippet", ""))
                     # Lọc bỏ ký tự lạ (như 🗹 hoặc unicode rác từ PDF)
+                    # Giu lai ky tu co the hien thi (loai bo garbage chars tu PDF)
                     clean_snippet = "".join(
                         ch for ch in raw_snippet
                         if ch.isprintable() and ord(ch) < 0x2000
@@ -2259,8 +2393,9 @@ with tab_chat:
                 with st.chat_message("assistant", avatar="🤖"):
                     if msg.get("mode_badge"):
                         st.markdown(msg["mode_badge"], unsafe_allow_html=True)
-                    # Render với format LaTeX sạch
-                    st.markdown(format_content_for_streamlit(msg["content"]), unsafe_allow_html=True)
+                    # Render với font toán học / thuật toán nếu cần
+                    rendered = render_math_content(msg["content"])
+                    st.markdown(rendered, unsafe_allow_html=True)
                     if msg.get("sources"):
                         st.markdown("**Nguồn trích dẫn:**")
                         sources_html = " ".join([
@@ -2371,8 +2506,12 @@ with tab_history:
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.markdown(f"**Câu trả lời**")
-                st.markdown(format_content_for_streamlit(item['answer']), unsafe_allow_html=True)
+                rendered_hist = render_math_content(item['answer'])
+                st.markdown(f"""
+                <div class="chat-ai-msg">
+                    <strong>Câu trả lời</strong><br>{rendered_hist}
+                </div>
+                """, unsafe_allow_html=True)
 
                 if item.get("sources"):
                     sources_html = " ".join([
