@@ -1,0 +1,160 @@
+Hệ quản trị
+CSDL
+PostgreSQL
+BÁO CÁO NHÓM 5
+HOÀNG VĂN HUYNH B23DCDT131
+NGUYỄN MINH THẮNG B23DCAT273
+CAO NGỌC QUANG LINH B23DCDT158
+ĐOÀN HOÀNG LONG B23DCVT255 
+PHẠM HẢI ĐÔNG B23DCVT090
+LÊ NHẬT HUY B23DCAT126
+HOÀNG VIỆT ANH B23DCVT016
+
+Mục lục
+GIỚI THIỆU
+PostgreSQL là một hệ quản trị cơ sở dữ liệu
+mã nguồn mở, nổi bật với khả năng mở rộng
+và tính linh hoạt cao.
+KIẾN TRÚC
+Kiến trúc client-server giúp PostgreSQL xử lý
+nhiều kết nối đồng thời, nâng cao hiệu suất
+và tính khả dụng của hệ thống.
+HƯỚNG DẪN
+Hướng dẫn cài đặt PostgreSQL dễ dàng với
+các bước tải về, cấu hình hệ thống và sử
+dụng pgAdmin để quản lý.
+
+Tổng quan PostgreSQL
+ORDBMS
+PostgreSQL là hệ quản trị cơ sở dữ liệu quan
+hệ đối tượng, kết hợp giữa các tính năng của
+DBMS quan hệ và đối tượng.
+PHÁT TRIỂN
+Được phát triển từ năm 1986, PostgreSQL đã
+trở thành một phần không thể thiếu trong
+cộng đồng mã nguồn mở với sự hỗ trợ mạnh
+mẽ.
+ĐA NỀN TẢNG
+PostgreSQL hỗ trợ nhiều hệ điều hành khác
+nhau và có khả năng mở rộng cao, thích nghi
+với nhiều nhu cầu và ứng dụng.
+
+Mô hình dữ liệu và
+Kiến trúc dữ liệu
+KẾT HỢP MÔ HÌNH
+PostgreSQL kết hợp mô hình quan hệ và đối
+tượng, cho phép sử dụng kiểu dữ liệu phức
+tạp và tính năng mở rộng.
+KIẾN TRÚC CLIENT-SERVER
+Kiến trúc client-server của PostgreSQL hỗ
+trợ kết nối từ xa, giúp tăng cường hiệu suất
+và khả năng mở rộng trong ứng dụng.
+
+TẢI VÀ CHUẨN BỊ
+Để bắt đầu, hãy truy cập trang tải xuống chính thức, chọn phiên bản tương thích
+và kiểm tra yêu cầu hệ thống tối thiểu.
+Hướng dẫn cài đặt
+PostgreSQL - Bước 1
+
+THIẾT LẬP BAN ĐẦU
+Sau khi cài đặt, người dùng cần thiết lập mật khẩu cho user postgres, cổng mặc
+định, và tùy chọn encoding cho hệ thống.
+Hướng dẫn cấu hình hệ
+thống PostgreSQL
+
+HƯỚNG DẪN SỬ DỤNG PGADMIN
+pgAdmin là công cụ mạnh mẽ giúp quản lý cơ sở dữ liệu PostgreSQL, cho phép
+tạo kết nối và thực hiện các truy vấn dễ dàng.
+Giao diện quản lý
+PostgreSQL bằng
+pgAdmin
+
+Các lệnh DDL cơ bản
+CREATE TABLE
+Lệnh CREATE TABLE cho phép tạo bảng mới
+trong cơ sở dữ liệu với các cột và kiểu dữ liệu
+xác định.
+ALTER TABLE
+Lệnh ALTER TABLE được sử dụng để thay đổi
+cấu trúc bảng đã có, như thêm, sửa đổi hoặc
+xóa cột.
+DROP TABLE
+Lệnh DROP TABLE xóa bỏ bảng và tất cả dữ
+liệu liên quan, cần thực hiện cẩn thận để
+tránh mất dữ liệu quý giá.
+
+Các lệnh DML cơ bản
+INSERT
+Lệnh INSERT INTO dùng để thêm dữ liệu mới
+vào bảng, có thể thêm nhiều bản ghi cùng lúc
+với cú pháp đơn giản.
+UPDATE
+Lệnh UPDATE cho phép sửa đổi dữ liệu đã có
+trong bảng, với khả năng cập nhật nhiều bản
+ghi cùng một lúc dễ dàng.
+DELETE
+Lệnh DELETE được sử dụng để xóa các bản
+ghi nhất định khỏi bảng, có thể chỉ định xóa
+theo điều kiện cụ thể.
+
+Các lệnh nâng cao
+JOIN
+JOIN cho phép kết hợp dữ liệu từ hai bảng
+hoặc hơn, giúp truy vấn trở nên linh hoạt và
+mạnh mẽ hơn.
+INDEX
+Việc tạo index giúp tối ưu hóa hiệu suất truy
+vấn bằng cách giảm thời gian tìm kiếm dữ
+liệu trong bảng lớn.
+CODE MẪU
+Dưới đây là đoạn code mẫu minh họa cách
+sử dụng JOIN và tạo index trong PostgreSQL,
+giúp cải thiện hiệu suất truy vấn.
+
+Quản lý Người dùng và Role
+CREATE USER
+Lệnh CREATE USER cho phép bạn tạo người
+dùng mới trong PostgreSQL với các quyền
+hạn cụ thể cho từng user.
+CREATE ROLE
+Lệnh CREATE ROLE cho phép bạn tạo các role
+trong PostgreSQL, giúp quản lý quyền truy
+cập một cách hiệu quả hơn.
+PHÂN LOẠI USER/ROLE
+PostgreSQL hỗ trợ phân loại user và role
+thành superuser và regular user, đảm bảo an
+toàn và bảo mật cho cơ sở dữ liệu.
+
+Phân quyền trong PostgreSQL
+GRANT
+Lệnh GRANT cho phép cấp quyền truy cập dữ
+liệu cho người dùng hoặc role cụ thể trong
+hệ quản trị cơ sở dữ liệu.
+REVOKE
+Lệnh REVOKE được sử dụng để thu hồi quyền
+đã cấp trước đó cho người dùng hoặc role,
+giúp bảo mật cơ sở dữ liệu.
+TÁC ĐỘNG
+Việc phân quyền chính xác giúp bảo vệ dữ
+liệu nhạy cảm và đảm bảo rằng chỉ những
+người dùng có quyền mới có thể truy cập.
+
+KIẾN TRÚC KẾT NỐI JDBC
+PostgreSQL hỗ trợ kết nối với ứng dụng Java qua JDBC, cho phép thực hiện truy
+vấn và quản lý cơ sở dữ liệu hiệu quả.
+Kết nối PostgreSQL với
+Java Web/App
+
+HƯỚNG DẪN CHI TIẾT
+Đoạn mã mẫu dưới đây thể hiện cách kết nối đến cơ sở dữ liệu PostgreSQL từ
+ứng dụng Java, sử dụng JDBC.
+Kết nối PostgreSQL
+bằng Java
+
+Contact Us
+EMAIL ADDRESS
+hello@reallygreatsite.com
+SOCIAL MEDIA
+@reallygreatsite
+PHONE
+123-456-7890
