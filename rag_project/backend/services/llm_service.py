@@ -72,11 +72,12 @@ class LLMService:
 
         # Tự động phát hiện context window và tính giới hạn an toàn
         self._context_window_tokens = self._detect_context_window()
-        self._max_output_tokens = min(
-            LLM_MAX_OUTPUT_TOKENS,
-            max(256, self._context_window_tokens // 4),
-        )
-        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - self._max_output_tokens)
+        # Cho phép AI xuất tối đa token để không bị cắt ngang câu trả lời
+        self._max_output_tokens = LLM_MAX_OUTPUT_TOKENS
+        
+        # Giả định AI cần tối thiểu 1024 tokens để trả lời khi tính toán không gian cho context
+        assumed_output = 1024
+        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - assumed_output)
         self._max_content_chars = min(
             LLM_MAX_CONTENT_CHARS,
             int(usable_tokens * self._CHARS_PER_TOKEN),
@@ -152,11 +153,12 @@ class LLMService:
         Gọi endpoint /health sau khi người dùng đổi model.
         """
         self._context_window_tokens = self._detect_context_window()
-        self._max_output_tokens = min(
-            LLM_MAX_OUTPUT_TOKENS,
-            max(256, self._context_window_tokens // 4),
-        )
-        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - self._max_output_tokens)
+        # Cho phép AI xuất tối đa token để không bị cắt ngang câu trả lời
+        self._max_output_tokens = LLM_MAX_OUTPUT_TOKENS
+        
+        # Giả định AI cần tối thiểu 1024 tokens để trả lời khi tính toán không gian cho context
+        assumed_output = 1024
+        usable_tokens = max(200, self._context_window_tokens - self._PROMPT_OVERHEAD_TOKENS - assumed_output)
         self._max_content_chars = min(
             LLM_MAX_CONTENT_CHARS,
             int(usable_tokens * self._CHARS_PER_TOKEN),
