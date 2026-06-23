@@ -4,10 +4,23 @@ Full-Context Edition — đọc toàn bộ tài liệu, trả lời chính xác 
 """
 
 import uuid
+import threading
+import hashlib
+import time
+from functools import lru_cache
 import httpx
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from pydantic import BaseModel
+from transformers import pipeline
+
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    RetryError,
+)
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -17,6 +30,7 @@ from ..core.config import (
     LOCAL_LLM_API_KEY,
     LOCAL_LLM_MODEL,
     EMBEDDING_MODEL_NAME,
+    NLI_MODEL_NAME,
     CHROMA_PERSIST_DIR,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
@@ -32,6 +46,7 @@ class ChunkDocument(BaseModel):
     id: str
     text: str
     filename: str
+    file_stem: str = ""  # Stem của tên file (không có extension) — dùng để filter ChromaDB
 
 
 class SearchResult(BaseModel):
@@ -48,16 +63,25 @@ class LLMService:
 
     # Token overhead: hệ thống prompt + câu hỏi + safety buffer
     _PROMPT_OVERHEAD_TOKENS = 400
-    # Tiếng Việt: trung bình 2.0 ký tự / token
-    _CHARS_PER_TOKEN = 2.0
+    # Tiếng Việt: an toàn với LLM local (khoảng 0.6 ký tự / token cho một số model)
+    _CHARS_PER_TOKEN = 0.6
 
     def __init__(self):
         self._llm_base_url = LOCAL_LLM_API_BASE
         self._llm_api_key = LOCAL_LLM_API_KEY
         self._model_name = LOCAL_LLM_MODEL
+        self._temperature: float = 0.1  # Default: thấp = nhất quán, ít sáng tạo
 
         self._kb_name = "rag_knowledge_base"
         self._indexed_file_paths: list = []
+
+        # Search cache: key → (results, timestamp)
+        # Invalidate khi có document mới được index
+        self._search_cache: dict = {}       # {cache_key: (results, timestamp)}
+        self._search_cache_lock = threading.Lock()
+        self._CACHE_TTL_SECONDS = 3600      # 1 giờ
+        self._CACHE_MAX_SIZE = 256          # Tối đa 256 query khác nhau
+
 
         # HTTP client với connection pool để tăng tốc độ
         self._http_client = httpx.Client(
@@ -101,6 +125,15 @@ class LLMService:
         except Exception as e:
             print(f"[ERROR] Cannot load embedding model: {e}")
             self._embedding_model = None
+
+        # Init NLI Model
+        try:
+            print(f"[INFO] Loading NLI model: {NLI_MODEL_NAME} ...")
+            self._nli_model = pipeline("text-classification", model=NLI_MODEL_NAME, top_k=None)
+            print("[OK] NLI model loaded.")
+        except Exception as e:
+            print(f"[ERROR] Cannot load NLI model: {e}")
+            self._nli_model = None
 
     def __del__(self):
         """Dóng HTTP client khi service bị hủy."""
@@ -195,8 +228,25 @@ class LLMService:
         return chunks
 
     def _call_llm(self, messages: list, timeout: float = 600.0) -> str:
-        """Gọi LM Studio/Ollama qua HTTP. Raise RuntimeError nếu thất bại."""
-        try:
+        """
+        Gọi LM Studio/Ollama qua HTTP.
+
+        Retry logic (tenacity):
+        - 3 lần thử, exponential backoff: 1s → 2s → 4s
+        - Chỉ retry khi gặp lỗi network/timeout (ConnectError, ReadTimeout)
+        - KHÔNG retry với lỗi 4xx (parse/validation) — vô ích và chậm
+        - Sau 3 lần thất bại → raise RuntimeError với thông điệp rõ ràng
+        """
+        _RETRY_EXCEPTIONS = (httpx.ConnectError, httpx.ReadTimeout)
+        MAX_ATTEMPTS = 3
+
+        @retry(
+            retry=retry_if_exception_type(_RETRY_EXCEPTIONS),
+            stop=stop_after_attempt(MAX_ATTEMPTS),
+            wait=wait_exponential(multiplier=1, min=1, max=4),
+            reraise=False,  # Chúng ta tự xử lý exception phía dưới
+        )
+        def _attempt():
             response = self._http_client.post(
                 f"{self._llm_base_url}/chat/completions",
                 headers={
@@ -206,7 +256,7 @@ class LLMService:
                 json={
                     "model": self._model_name,
                     "messages": messages,
-                    "temperature": 0.1,          # Thấp hơn = nhất quán hơn, ít sáng tạo hơn
+                    "temperature": getattr(self, "_temperature", 0.1),
                     "max_tokens": self._max_output_tokens,
                     "stream": False,
                 },
@@ -215,6 +265,9 @@ class LLMService:
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
+
+        try:
+            return _attempt()
         except httpx.HTTPStatusError as e:
             detail = e.response.text
             raise RuntimeError(
@@ -232,6 +285,18 @@ class LLMService:
                 "LM Studio mất quá nhiều thời gian để xử lý.\n"
                 "Tài liệu có thể quá lớn. Hãy thử đặt câu hỏi cụ thể hơn hoặc chọn tài liệu ngắn hơn."
             )
+        except RetryError as e:
+            # tenacity đã hết lượt retry — lấy lỗi cuối để xác định loại
+            last = e.last_attempt.exception()
+            if isinstance(last, httpx.ConnectError):
+                raise RuntimeError(
+                    f"Khong the ket noi den LM Studio tai {self._llm_base_url} sau {MAX_ATTEMPTS} lần thu.\n"
+                    f"Hay bat Local Server trong LM Studio (tab <->) roi thu lai."
+                ) from last
+            raise RuntimeError(
+                f"LM Studio không phản hồi sau {MAX_ATTEMPTS} lần thử (timeout).\n"
+                f"Tài liệu có thể quá lớn. Hãy thử đặt câu hỏi cụ thể hơn."
+            ) from last
         except Exception as e:
             raise RuntimeError(f"Loi goi Local LLM: {str(e)}")
 
@@ -262,22 +327,78 @@ class LLMService:
                 continue
 
             texts = [c.text for c in chunks]
-            embeddings = self._embedding_model.encode(texts, batch_size=32, show_progress_bar=False).tolist()
+            
+            # Thêm prefix "passage: " cho e5 model
+            passage_texts = [f"passage: {t}" for t in texts]
+            
+            # Log 1 ví dụ ra màn hình (chỉ chạy 1 lần để xác nhận)
+            if not hasattr(self, "_logged_passage_example") and len(passage_texts) > 0:
+                print(f"\n[DEBUG - PREFIX PASSAGE EXAMPLE]:\n{passage_texts[0][:200]}...\n")
+                self._logged_passage_example = True
 
+            embeddings = self._embedding_model.encode(passage_texts, batch_size=32, show_progress_bar=False).tolist()
+
+            # Thêm cả filename và file_stem vào metadata — file_stem dùng cho
+            # ChromaDB filter chính xác mà không cần load toàn bộ collection
+            stem = path.stem  # Ví dụ: 'BT Giai tich 2' từ 'BT Giai tich 2.extracted.txt'
             self._collection.add(
                 ids=[c.id for c in chunks],
                 embeddings=embeddings,
                 documents=texts,
-                metadatas=[{"filename": c.filename} for c in chunks],
+                metadatas=[{
+                    "filename": c.filename,
+                    "file_stem": stem,
+                } for c in chunks],
             )
-            print(f"[OK] Indexed {len(chunks)} chunks from {path.name}")
+            print(f"[OK] Indexed {len(chunks)} chunks from {path.name} (stem={stem!r})")
 
+        # Invalidate search cache — document mới ảnh hưởng đến kết quả vector search
+        self.invalidate_search_cache()
         return self._collection.count()
 
     def reload_all_files(self, file_paths: List[str]) -> int:
         """Cập nhật danh sách file (ChromaDB persistent nên không cần nạp lại)."""
         self._indexed_file_paths = list(file_paths)
         return self._collection.count()
+
+    # ------------------------------------------------------------------
+    # Search cache helpers
+    # ------------------------------------------------------------------
+
+    def _make_cache_key(self, query: str, top_k: int, allowed_filenames: Optional[List[str]]) -> str:
+        """Tạo cache key từ query + top_k + allowed_filenames."""
+        raw = f"{query}|{top_k}|{sorted(allowed_filenames) if allowed_filenames else None}"
+        return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+    def _get_from_cache(self, key: str) -> Optional[List["SearchResult"]]:
+        """Lấy kết quả từ cache nếu còn hiệu lực (chưa hết TTL)."""
+        with self._search_cache_lock:
+            entry = self._search_cache.get(key)
+            if entry is None:
+                return None
+            results, ts = entry
+            if time.time() - ts > self._CACHE_TTL_SECONDS:
+                del self._search_cache[key]  # Expired
+                return None
+            return results
+
+    def _put_to_cache(self, key: str, results: List["SearchResult"]) -> None:
+        """Lưu kết quả vào cache, giời hạn tối đa CACHE_MAX_SIZE entry."""
+        with self._search_cache_lock:
+            if len(self._search_cache) >= self._CACHE_MAX_SIZE:
+                # Xóa entry cũ nhất (FIFO approximation)
+                oldest_key = next(iter(self._search_cache))
+                del self._search_cache[oldest_key]
+            self._search_cache[key] = (results, time.time())
+
+    def invalidate_search_cache(self) -> None:
+        """Xóa toàn bộ search cache. Gọi khi có document mới được index."""
+        with self._search_cache_lock:
+            count = len(self._search_cache)
+            self._search_cache.clear()
+            if count > 0:
+                print(f"[Cache] Invalidated {count} search cache entries do có document mới.")
+
 
     # ------------------------------------------------------------------
     # Search (Retrieval)
@@ -289,11 +410,23 @@ class LLMService:
         top_k: int = 15,
         allowed_filenames: List[str] = None,
     ) -> List[SearchResult]:
-        """Vector search trong ChromaDB — lấy tối đa chunks liên quan nhất."""
+        """Vector search trong ChromaDB với LRU cache (TTL 1 giờ).
+        
+        Cache key = hash(query + top_k + allowed_filenames).
+        Cache bị xóa hoàn toàn khi có document mới được index.
+        """
         if not self._embedding_model or self._collection.count() == 0:
             return []
 
-        query_embedding = self._embedding_model.encode([query]).tolist()
+        cache_key = self._make_cache_key(query, top_k, allowed_filenames)
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            print(f"[Cache] HIT — query={query[:40]!r}, top_k={top_k}")
+            return cached
+
+        # Thêm prefix "query: " cho e5 model
+        query_text = f"query: {query}"
+        query_embedding = self._embedding_model.encode([query_text]).tolist()
 
         where_filter = None
         if allowed_filenames:
@@ -321,9 +454,11 @@ class LLMService:
                     id=results["ids"][0][i],
                     text=results["documents"][0][i],
                     filename=results["metadatas"][0][i].get("filename", "unknown"),
+                    file_stem=results["metadatas"][0][i].get("file_stem", ""),
                 )
                 search_results.append(SearchResult(chunk=chunk, score=score))
 
+        self._put_to_cache(cache_key, search_results)
         return search_results
 
     def get_chunks_by_ids(self, chunk_ids: List[str]) -> List[ChunkDocument]:
@@ -369,14 +504,77 @@ class LLMService:
 
     def get_random_chunks_by_stem(self, stem: str, count: int = 5) -> List[ChunkDocument]:
         """Lấy ngẫu nhiên các chunk từ tài liệu bằng cách tìm tên file chứa stem.
-        
-        Dùng khi PDF được lưu dưới dạng .extracted.txt nên tên file không khớp chính xác.
-        Ví dụ: stem='BT Giai tich 2' sẽ khớp 'BT Giai tich 2.extracted.txt'
+
+        Ưu tiên dùng ChromaDB filter trên field 'file_stem' (chậm nhỏ, không load toàn bộ RAM).
+        Fallback về Python filter nếu DB cũ chưa có metadata 'file_stem'.
+
+        Ví dụ: stem='BT Giai tich 2' khớp 'BT Giai tich 2.extracted.txt'
         """
         if self._collection.count() == 0:
             return []
 
-        # Lấy tất cả các chunk và lọc theo stem
+        import random
+        stem_lower = stem.lower()
+
+        # -----------------------------------------------------------
+        # Ưu tiên: ChromaDB filter theo file_stem (chính xác, hiệu quả bộ nhớ)
+        # -----------------------------------------------------------
+        try:
+            results = self._collection.get(
+                where={"file_stem": stem},  # Exact match trên field file_stem
+            )
+            if results.get("documents"):
+                items = list(zip(results["ids"], results["documents"], results["metadatas"]))
+                if items:
+                    if len(items) > count:
+                        items = random.sample(items, count)
+                    chunks = []
+                    for id_val, doc_val, meta_val in items:
+                        chunks.append(ChunkDocument(
+                            id=id_val,
+                            text=doc_val,
+                            filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
+                            file_stem=meta_val.get("file_stem", "") if meta_val else "",
+                        ))
+                    print(f"[OK] get_random_chunks_by_stem: ChromaDB filter match {len(chunks)} chunks (stem={stem!r})")
+                    return chunks
+        except Exception as e:
+            print(f"[WARN] ChromaDB filter failed ({e}), falling back to Python filter")
+
+        # -----------------------------------------------------------
+        # Fallback: DB cũ không có file_stem — thử filter theo filename exact match
+        # -----------------------------------------------------------
+        try:
+            results = self._collection.get(where={"filename": {"$in": [
+                stem,                         # exact filename
+                f"{stem}.txt",               # plain text
+                f"{stem}.extracted.txt",     # PDF/DOCX extracted
+            ]}})
+            if results.get("documents"):
+                items = list(zip(results["ids"], results["documents"], results["metadatas"]))
+                if items:
+                    if len(items) > count:
+                        items = random.sample(items, count)
+                    chunks = []
+                    for id_val, doc_val, meta_val in items:
+                        chunks.append(ChunkDocument(
+                            id=id_val,
+                            text=doc_val,
+                            filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
+                        ))
+                    print(f"[OK] get_random_chunks_by_stem: filename filter match {len(chunks)} chunks")
+                    return chunks
+        except Exception as e:
+            print(f"[WARN] Filename filter failed ({e}), falling back to full-scan")
+
+        # -----------------------------------------------------------
+        # Last resort fallback: load toàn bộ và filter bằng Python
+        # (chỉ có thể xảy ra với DB rất cũ không có metadata nào)
+        # -----------------------------------------------------------
+        print(
+            f"[WARN] get_random_chunks_by_stem: fallback full-scan — DB cũ thiếu metadata. "
+            f"Hãy re-index để cải thiện hiệu suất."
+        )
         try:
             all_results = self._collection.get(limit=self._collection.count())
         except Exception:
@@ -385,8 +583,6 @@ class LLMService:
         if not all_results.get("documents") or not all_results.get("metadatas"):
             return []
 
-        # Lọc chunk có filename chứa stem (không phân biệt hoa/thường)
-        stem_lower = stem.lower()
         matching_items = []
         for i in range(len(all_results["ids"])):
             meta = all_results["metadatas"][i] if all_results.get("metadatas") else {}
@@ -401,7 +597,6 @@ class LLMService:
         if not matching_items:
             return []
 
-        import random
         if len(matching_items) > count:
             matching_items = random.sample(matching_items, count)
 
@@ -505,6 +700,29 @@ class LLMService:
         return self._call_llm(messages, timeout=600.0)
 
     # ------------------------------------------------------------------
+    # NLI Verification
+    # ------------------------------------------------------------------
+
+    def verify_claims(self, context: str, claims: List[str]) -> List[List[dict]]:
+        """Verify list of claims against context using NLI model."""
+        if not self._nli_model or not claims:
+            return []
+        
+        results = []
+        # Tối ưu: truncate context nếu quá dài so với giới hạn NLI (thường là 512 tokens)
+        # NLI pipeline tự động xử lý truncate, nhưng an toàn thì ta để nguyên pipeline xử lý.
+        for claim in claims:
+            try:
+                # text = premise (context), text_pair = hypothesis (claim)
+                result = self._nli_model({"text": context, "text_pair": claim}, truncation=True)
+                results.append(result)
+            except Exception as e:
+                print(f"[WARN] Lỗi khi verify claim: {e}")
+                results.append([])
+                
+        return results
+
+    # ------------------------------------------------------------------
     # Health Check
     # ------------------------------------------------------------------
 
@@ -554,13 +772,31 @@ class LLMService:
 
 
 # ============================================================
-# Singleton
+# Singleton — Thread-safe (double-checked locking)
 # ============================================================
 _llm_service_instance: Optional[LLMService] = None
+_llm_service_lock = threading.Lock()
 
 
 def get_llm_service() -> LLMService:
+    """
+    Trả về singleton LLMService.
+
+    Thread-safe bằng double-checked locking:
+    - Kiểm tra lần 1 ngoài lock: tránh overhead acquire lock sau khi đã init.
+    - Kiểm tra lần 2 trong lock: đảm bảo chỉ 1 thread tạo instance.
+    - Instance chỉ được gán SAU KHI constructor thành công:
+      nếu LLMService.__init__() raise exception, _llm_service_instance
+      vẫn là None và lần gọi tiếp theo sẽ retry được.
+    """
     global _llm_service_instance
+    # Lần kiểm tra 1 (ngoài lock): fast path khi đã khởi tạo
     if _llm_service_instance is None:
-        _llm_service_instance = LLMService()
+        with _llm_service_lock:
+            # Lần kiểm tra 2 (trong lock): tránh race condition
+            if _llm_service_instance is None:
+                # Tạo trên biến cục bộ trước — chỉ assign vào global
+                # sau khi constructor thành công, tránh stuck ở state lỗi
+                instance = LLMService()
+                _llm_service_instance = instance
     return _llm_service_instance

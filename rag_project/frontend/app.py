@@ -1171,7 +1171,7 @@ def render_math_content(text: str) -> str:
         r'\$\$[\s\S]+?\$\$',    # block math $$...$$
         r'\\[\(\)\[\]]',         # \( \) \[ \]
         r'\\frac|\\sum|\\int|\\lim|\\sqrt|\\alpha|\\beta|\\theta|\\sigma|\\mu|\\pi|\\infty|\\partial',
-        r'O\(n[\^\s]|O\(log|O\(1\)|\Theta\(|\Omega\(',  # Big-O notation
+        r'O\(n[\^\s]|O\(log|O\(1\)|\\Theta\(|\\Omega\(',  # Big-O notation
     ]
     ALGO_MARKERS = [
         r'\b(Algorithm|Procedure|function|pseudocode|for i =|while.*do|if.*then|return |Input:|Output:)',

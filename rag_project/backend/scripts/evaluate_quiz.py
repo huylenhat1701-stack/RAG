@@ -199,7 +199,7 @@ def run_quiz_evaluation():
                 print("  -> Nen them vao prompt: 'Cac lua chon sai phai tuong tu nhau va hop ly'.")
 
         # Luu CSV
-        out_file = PROJECT_ROOT / "rag_project" / "evaluation_quiz.csv"
+        out_file = PROJECT_ROOT / "evaluation_quiz.csv"
         with open(out_file, "w", newline="", encoding="utf-8-sig") as f:
             if results:
                 writer = csv.DictWriter(f, fieldnames=results[0].keys())

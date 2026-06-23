@@ -219,14 +219,14 @@ def run_bkt_evaluation():
         print(f"  Nguong phan loai: {BKT_THRESHOLD}%")
 
         # Luu CSV
-        out_file = PROJECT_ROOT / "rag_project" / "evaluation_bkt.csv"
+        out_file = PROJECT_ROOT / "evaluation_bkt.csv"
         with open(out_file, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=details[0].keys())
             writer.writeheader()
             writer.writerows(details)
 
         # Luu summary
-        summary_file = PROJECT_ROOT / "rag_project" / "evaluation_bkt_summary.txt"
+        summary_file = PROJECT_ROOT / "evaluation_bkt_summary.txt"
         with open(summary_file, "w", encoding="utf-8") as f:
             f.write(f"Thoi diem danh gia: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Tong mau: {n}\n")

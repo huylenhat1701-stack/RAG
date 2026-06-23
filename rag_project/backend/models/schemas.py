@@ -68,6 +68,12 @@ class AskRequest(BaseModel):
     top_k: Optional[int] = Field(default=15, ge=1, le=50, description="Số lượng chunk tài liệu tìm kiếm (chỉ dùng khi RAG mode)")
     history: Optional[List[MessageInfo]] = Field(default=[], description="Lịch sử trò chuyện")
     doc_ids: Optional[List[int]] = Field(default=None, description="Giới hạn tìm kiếm trong danh sách ID tài liệu (None = tất cả)")
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Điều chỉnh độ sáng tạo của LLM (0=nhất quán, 1=sáng tạo). Mặc định: 0.1",
+    )
 
 
 class ExerciseRequest(BaseModel):
@@ -115,6 +121,12 @@ class QuizResponse(BaseModel):
 class QuizRequest(BaseModel):
     """Schema nhận yêu cầu tạo quiz trắc nghiệm."""
     count: Optional[int] = Field(default=10, ge=3, le=30, description="Số câu hỏi")
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Điều chỉnh độ sáng tạo của LLM khi tạo quiz (0=nhất quán, 1=sáng tạo). Mặc định: 0.1",
+    )
 
 
 class QuizSubmitRequest(BaseModel):
@@ -169,6 +181,8 @@ class AskResponse(BaseModel):
     history_id: int
     mode: str = "rag"           # "full_context" | "rag" | "none"
     context_chars: int = 0      # Số ký tự nội dung đã đưa vào LLM
+    confidence_score: float = Field(default=0.0, description="Độ tin cậy của câu trả lời dựa trên context (0-1)")
+    warning: Optional[str] = Field(default=None, description="Cảnh báo nếu hậu kiểm phát hiện câu trả lời không có trong tài liệu")
 
 
 # ============================================================

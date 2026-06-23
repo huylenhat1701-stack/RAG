@@ -1,0 +1,6 @@
+Thoi diem danh gia: 2026-06-21 18:52:21
+Tong mau: 45
+Accuracy: 91.1%
+AUC-ROC:  0.984
+Log-Loss: 0.355
+Tham so: p_slip=0.1, p_guess=0.2, p_transit=0.1

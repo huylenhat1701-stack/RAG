@@ -1,0 +1,7 @@
+Cực trị của hàm nhiều biến: Để tìm cực trị của hàm nhiều biến, ta tính các đạo hàm riêng bậc nhất và giải hệ phương trình đạo hàm riêng bằng 0 để tìm điểm dừng. Sau đó, dùng đạo hàm riêng bậc hai để xét điều kiện đủ.
+Vi phân toàn phần: Vi phân toàn phần của hàm số f(x, y) là df = f'_x dx + f'_y dy.
+Phương pháp nhân tử Lagrange: Phương pháp nhân tử Lagrange được dùng để tìm cực trị có điều kiện. Ta lập hàm Lagrange L(x, y, lambda) = f(x, y) + lambda * g(x, y) và giải hệ phương trình đạo hàm riêng.
+Tích phân bội hai: Tích phân bội hai của hàm f(x,y) trên miền D là giới hạn của tổng tích phân Riemann. Nó thường được tính bằng cách đưa về tích phân lặp.
+Đổi biến trong tích phân kép: Khi đổi biến số x = x(u,v) và y = y(u,v), ta phải nhân với giá trị tuyệt đối của định thức Jacobian J = D(x,y)/D(u,v).
+Tích phân đường: Tích phân đường loại 1 phụ thuộc vào cung đường và không phụ thuộc vào hướng, thường dùng tính khối lượng. Tích phân đường loại 2 phụ thuộc vào hướng của cung đường, dùng tính công của lực.
+Công thức Green: Công thức Green thiết lập mối liên hệ giữa tích phân đường loại 2 dọc theo đường cong kín và tích phân kép trên miền phẳng được bao bởi đường cong đó.

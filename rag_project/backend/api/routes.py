@@ -309,12 +309,10 @@ def create_quiz(
     current_user: User = Depends(get_current_user),
 ):
     """Tạo bộ câu hỏi thi trắc nghiệm tương tác từ tài liệu."""
-    # Kiểm tra quyền
-    doc_repo = DocumentRepository(db)
-    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
-
+    # Thiết lập temperature nếu người dùng truyền vào
+    original_temperature = llm_service._temperature
+    if request.temperature is not None:
+        llm_service._temperature = request.temperature
     try:
         return generate_quiz(
             doc_id=doc_id,
@@ -327,6 +325,8 @@ def create_quiz(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo quiz: {str(e)}")
+    finally:
+        llm_service._temperature = original_temperature
 
 
 @router.post(
@@ -407,6 +407,10 @@ def ask_question(
     current_user: User = Depends(get_current_user),
 ):
     """Hỏi đáp thông minh dựa trên tài liệu đã upload."""
+    # Thiết lập temperature nếu người dùng truyền vào
+    original_temperature = llm_service._temperature
+    if request.temperature is not None:
+        llm_service._temperature = request.temperature
     try:
         response = answer_question(
             question=request.question,
@@ -424,6 +428,9 @@ def ask_question(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Lỗi xử lý câu hỏi: {str(e)}")
+    finally:
+        # Khôi phục temperature về default để không ảnh hưởng request khác
+        llm_service._temperature = original_temperature
 
 
 @router.get(

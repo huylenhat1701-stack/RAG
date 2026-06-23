@@ -18,6 +18,8 @@ from ..core.config import (
     SUMMARY_SYSTEM_PROMPT,
     LLM_MAX_CONTENT_CHARS,
     FULL_CONTEXT_THRESHOLD_CHARS,
+    RELEVANCE_THRESHOLD,
+    NO_CONTEXT_THRESHOLD,
 )
 
 
@@ -136,8 +138,11 @@ def answer_question(
             for name in doc_labels
         ]
         sources_for_db = doc_labels
+        confidence_score = 1.0  # Full context = 100% tin cậy vì đọc hết tài liệu
+        warning = None
 
     # ----------------------------------------------------------------
+
     # RAG MODE: Tài liệu quá lớn → dùng vector search + top_k lớn
     # ----------------------------------------------------------------
     else:
@@ -151,29 +156,109 @@ def answer_question(
         except Exception as e:
             raise RuntimeError(f"Lỗi tìm kiếm: {str(e)}")
 
-        context_chars = sum(len(r.chunk.text) for r in search_results)
+        # ------------------------------------------------------------
+        # Relevance threshold: kiểm tra max score trước khi gọi LLM
+        # ------------------------------------------------------------
+        max_score = max((r.score for r in search_results), default=0.0)
 
-        try:
-            answer = llm_service.generate_answer(
-                question=question,
-                context_chunks=search_results,
-                history=history,
+        if max_score < NO_CONTEXT_THRESHOLD:
+            # Không có chunk nào đủ liên quan → trả fallback, không gọi LLM
+            print(
+                f"[RAG Mode] Max score {max_score:.3f} < NO_CONTEXT_THRESHOLD {NO_CONTEXT_THRESHOLD} "
+                f"→ trả fallback, bỏ qua LLM generate."
             )
-        except RuntimeError:
-            raise
-        except Exception as e:
-            raise RuntimeError(f"Lỗi sinh câu trả lời (RAG): {str(e)}")
+            answer = "Không tìm thấy thông tin liên quan trong tài liệu."
+            context_chars = 0
+            sources_for_response = []
+            sources_for_db = []
+            confidence_score = 0.0
+            warning = None
+        else:
+            # Lọc chunk dưới RELEVANCE_THRESHOLD trước khi đưa vào context
+            filtered_chunks = [r for r in search_results if r.score >= RELEVANCE_THRESHOLD]
 
-        # Build sources
-        sources_for_response = []
-        sources_for_db = []
-        seen = set()
-        for r in search_results:
-            fn = r.chunk.filename
-            if fn not in seen:
-                seen.add(fn)
-                sources_for_response.append(SourceInfo(file_name=fn, relevance_score=round(r.score, 3)))
-                sources_for_db.append(fn)
+            # Fallback: nếu sau lọc không còn chunk nào (tất cả đều ở giữa 2 ngưỡng)
+            # → dùng toàn bộ search_results để không gọi LLM với context rỗng
+            context_chunks = filtered_chunks if filtered_chunks else search_results
+
+            if filtered_chunks:
+                print(
+                    f"[RAG Mode] {len(search_results)} chunks → giữ lại {len(filtered_chunks)} "
+                    f"(score >= {RELEVANCE_THRESHOLD})"
+                )
+            else:
+                print(
+                    f"[RAG Mode] Tất cả {len(search_results)} chunks dưới threshold, "
+                    f"dùng toàn bộ (fallback)."
+                )
+
+            context_chars = sum(len(r.chunk.text) for r in context_chunks)
+
+            try:
+                answer = llm_service.generate_answer(
+                    question=question,
+                    context_chunks=context_chunks,
+                    history=history,
+                )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                raise RuntimeError(f"Lỗi sinh câu trả lời (RAG): {str(e)}")
+
+            # Tính toán Confidence Score (weighted average của score)
+            scores = [r.score for r in context_chunks]
+            sum_scores = sum(scores)
+            confidence_score = sum(s * s for s in scores) / sum_scores if sum_scores > 0 else 0.0
+
+            # ------------------------------------------------------------
+            # Hậu kiểm (Claim Verification)
+            # ------------------------------------------------------------
+            warning = None
+            if hasattr(llm_service, "verify_claims"):
+                # Lấy các câu trong answer làm claims (đơn giản hóa bằng split '.')
+                claims = [c.strip() for c in answer.split('.') if len(c.strip()) > 10]
+                if claims:
+                    # Gộp toàn bộ context thành 1 chuỗi để verify
+                    context_text = " ".join([r.chunk.text for r in context_chunks])
+                    # Giới hạn context length cho NLI model (thường ~512 tokens -> ~2000 chars)
+                    if len(context_text) > 2000:
+                        context_text = context_text[:2000]
+                        
+                    nli_results = llm_service.verify_claims(context_text, claims)
+                    
+                    has_contradiction = False
+                    for res in nli_results:
+                        if not res:
+                            continue
+                        # Sắp xếp để lấy top 1 (argmax)
+                        sorted_res = sorted(res, key=lambda x: x['score'], reverse=True)
+                        if not sorted_res:
+                            continue
+                        
+                        argmax_label = sorted_res[0]['label']
+                        
+                        if argmax_label == "contradiction":
+                            has_contradiction = True
+                            confidence_score -= 0.2
+                        elif argmax_label == "neutral":
+                            confidence_score -= 0.1
+                            
+                    if has_contradiction:
+                        warning = "Một số thông tin trong câu trả lời có thể không chính xác so với tài liệu."
+                        
+                    # Đảm bảo điểm không bị âm
+                    confidence_score = max(0.0, confidence_score)
+
+            # Build sources
+            sources_for_response = []
+            sources_for_db = []
+            seen = set()
+            for r in context_chunks:
+                fn = r.chunk.filename
+                if fn not in seen:
+                    seen.add(fn)
+                    sources_for_response.append(SourceInfo(file_name=fn, relevance_score=round(r.score, 3)))
+                    sources_for_db.append(fn)
 
     # ----------------------------------------------------------------
     # Lưu lịch sử
@@ -194,6 +279,8 @@ def answer_question(
         history_id=hist.id,
         mode=mode,
         context_chars=context_chars,
+        confidence_score=round(confidence_score, 3),
+        warning=warning,
     )
 
 
