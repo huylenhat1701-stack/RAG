@@ -108,6 +108,7 @@ class QuizQuestion(BaseModel):
     explanation: str = ""  # Giải thích tại sao đáp án đúng
     step_by_step_explanation: str = "" # CoT Math Tutor
     chunk_id: str = ""     # Để biết câu hỏi sinh từ đoạn kiến thức nào
+    bloom_level: str = ""  # Cấp độ Bloom của câu hỏi này
 
 
 class QuizResponse(BaseModel):
@@ -128,6 +129,10 @@ class QuizRequest(BaseModel):
         le=2.0,
         description="Điều chỉnh độ sáng tạo của LLM khi tạo quiz (0=nhất quán, 1=sáng tạo). Mặc định: 0.1",
     )
+    bloom_level: Optional[str] = Field(
+        default=None,
+        description="Cấp độ Bloom: 'remember' | 'understand' | 'apply' | 'analyze'. None = ngẫu nhiên."
+    )
 
 
 class QuizSubmitRequest(BaseModel):
@@ -135,6 +140,10 @@ class QuizSubmitRequest(BaseModel):
     session_id: str = Field(default="default_user", description="ID người dùng")
     chunk_id: str = Field(..., description="ID của chunk kiến thức")
     is_correct: bool = Field(..., description="Người dùng trả lời đúng hay sai")
+    bloom_level: Optional[str] = Field(
+        default=None,
+        description="Cấp độ Bloom của câu hỏi: 'remember' | 'understand' | 'apply' | 'analyze'"
+    )
 
 
 class QuizSubmitResponse(BaseModel):

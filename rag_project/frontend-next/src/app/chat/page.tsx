@@ -151,6 +151,12 @@ export default function ChatPage() {
     setHistory([]);
   };
 
+  const handleNewChat = async () => {
+    await api.delete("/chat/history");
+    setHistory([]);
+    window.location.reload();
+  };
+
   return (
     <main className="min-h-screen bg-background text-foreground relative transition-colors duration-300">
       {/* Background ambient light */}
@@ -179,7 +185,7 @@ export default function ChatPage() {
             
             <div className="flex gap-3 mb-10">
               <button 
-                onClick={fetchHistory}
+                onClick={handleNewChat}
                 className="flex items-center gap-2 bg-foreground text-background px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 active:scale-[0.98] transition-premium cursor-pointer shadow-md"
               >
                 <Plus weight="bold" /> Hội thoại mới

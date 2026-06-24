@@ -78,6 +78,7 @@ class QuizHistory(Base):
     chunk_id = Column(String(100), nullable=False, index=True)        # Chunk kiến thức
     is_correct = Column(Integer, nullable=False)                      # 1 nếu đúng, 0 nếu sai
     timestamp = Column(DateTime, default=datetime.utcnow)
+    bloom_level = Column(String(20), nullable=True, default=None)     # Cấp độ Bloom của câu hỏi này
 
 
 class UserKnowledge(Base):

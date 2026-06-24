@@ -40,3 +40,6 @@ pytest-mock==3.14.0
 bcrypt==4.2.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+
+# PDF Generation
+fpdf2==2.8.1

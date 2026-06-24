@@ -9,6 +9,12 @@ if sys.platform == "win32":
     from collections import namedtuple
     _uname_result = namedtuple('uname_result', ['system', 'node', 'release', 'version', 'machine'])
     platform.uname = lambda: _uname_result(system='Windows', node='UNKNOWN', release='10', version='10.0.22631', machine='AMD64')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 
 import traceback
 from contextlib import asynccontextmanager

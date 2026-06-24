@@ -9,7 +9,7 @@ class AdaptiveTutorService:
         self.p_guess = 0.2      # Xác suất đoán mò đúng dù chưa hiểu
         self.p_transit = 0.1    # Xác suất học được kiến thức mới sau khi luyện tập
 
-    def update_knowledge(self, session_id: str, doc_id: int, chunk_id: str, is_correct: int, db: Session):
+    def update_knowledge(self, session_id: str, doc_id: int, chunk_id: str, is_correct: int, db: Session, bloom_level: str = None):
         """
         Cập nhật mô hình học tập BKT của người dùng
         """
@@ -18,7 +18,8 @@ class AdaptiveTutorService:
             session_id=session_id,
             doc_id=doc_id,
             chunk_id=chunk_id,
-            is_correct=is_correct
+            is_correct=is_correct,
+            bloom_level=bloom_level
         )
         db.add(history)
         

@@ -4,6 +4,7 @@ Full-Context Edition — đọc toàn bộ tài liệu, trả lời chính xác 
 """
 
 import uuid
+import random
 import threading
 import hashlib
 import time
@@ -229,7 +230,13 @@ class LLMService:
             chunks.append(ChunkDocument(id=chunk_id, text=chunk_text, filename=filename))
         return chunks
 
-    def _call_llm(self, messages: list, timeout: float = 600.0) -> str:
+    def _call_llm(
+        self,
+        messages: list,
+        timeout: float = 600.0,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str:
         """
         Gọi LM Studio/Ollama qua HTTP.
 
@@ -238,9 +245,15 @@ class LLMService:
         - Chỉ retry khi gặp lỗi network/timeout (ConnectError, ReadTimeout)
         - KHÔNG retry với lỗi 4xx (parse/validation) — vô ích và chậm
         - Sau 3 lần thất bại → raise RuntimeError với thông điệp rõ ràng
+
+        Params:
+        - temperature: Ghi đè nhiệt độ mặc định (self._temperature) cho request này.
+        - seed: Nếu được đặt, truyền vào llama.cpp để phá vỡ KV-cache reuse giữa
+          các request có cùng prefix. Dùng random seed cho quiz để tạo câu hỏi đa dạng.
         """
         _RETRY_EXCEPTIONS = (httpx.ConnectError, httpx.ReadTimeout)
         MAX_ATTEMPTS = 3
+        _temperature = temperature if temperature is not None else getattr(self, "_temperature", 0.1)
 
         @retry(
             retry=retry_if_exception_type(_RETRY_EXCEPTIONS),
@@ -249,19 +262,24 @@ class LLMService:
             reraise=False,  # Chúng ta tự xử lý exception phía dưới
         )
         def _attempt():
+            body = {
+                "model": self._model_name,
+                "messages": messages,
+                "temperature": _temperature,
+                "max_tokens": self._max_output_tokens,
+                "stream": False,
+            }
+            # seed phá vỡ KV-cache reuse: llama.cpp sẽ không tái dùng KV-cache
+            # khi seed thay đổi, ngay cả khi prompt hoàn toàn giống nhau.
+            if seed is not None:
+                body["seed"] = seed
             response = self._http_client.post(
                 f"{self._llm_base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self._llm_api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": self._model_name,
-                    "messages": messages,
-                    "temperature": getattr(self, "_temperature", 0.1),
-                    "max_tokens": self._max_output_tokens,
-                    "stream": False,
-                },
+                json=body,
                 timeout=timeout,
             )
             response.raise_for_status()
@@ -478,7 +496,11 @@ class LLMService:
                     filename=results["metadatas"][i].get("filename", "unknown") if results.get("metadatas") else "unknown",
                 )
                 chunks.append(chunk)
+        # Shuffle để tránh thứ tự cố định → câu hỏi không bị lặp pattern
+        import random as _random
+        _random.shuffle(chunks)
         return chunks
+
 
     def get_random_chunks(self, filename: str, count: int = 5) -> List[ChunkDocument]:
         """Lấy ngẫu nhiên các chunk từ một tài liệu cụ thể."""
@@ -650,6 +672,64 @@ class LLMService:
             ))
         return chunks
 
+    def _get_embeddings_for_doc(self, filename: str, stem: str) -> dict:
+        """
+        [MỚI - PRIVATE] Lấy tất cả chunks kèm embeddings của một tài liệu.
+        Sử dụng cho Knowledge Graph.
+        """
+        if self._collection.count() == 0:
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+
+        # 1. Thử exact match file_stem
+        try:
+            results = self._collection.get(
+                where={"file_stem": stem},
+                include=["documents", "metadatas", "embeddings"]
+            )
+            if results and results.get("ids") and len(results["ids"]) > 0:
+                return results
+        except Exception as e:
+            print(f"[WARN] _get_embeddings_for_doc exact filter failed: {e}")
+
+        # 3. Thử filename exact match hoặc các variants
+        filename_variants = [
+            filename,
+            f"{stem}.txt",
+            f"{stem}.extracted.txt",
+            f"{stem}_1.extracted.txt",
+            f"{stem}_2.extracted.txt",
+            f"{stem}_3.extracted.txt",
+        ]
+        try:
+            results = self._collection.get(
+                where={"filename": {"$in": filename_variants}},
+                include=["documents", "metadatas", "embeddings"]
+            )
+            if results and results.get("ids") and len(results["ids"]) > 0:
+                return results
+        except Exception as e:
+            print(f"[WARN] _get_embeddings_for_doc filename list filter failed: {e}")
+
+        # 4. Fallback: scan và filter thủ công bằng python
+        try:
+            all_results = self._collection.get(include=["documents", "metadatas", "embeddings"])
+            filtered = {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+            stem_lower = stem.lower()
+            for idx, meta in enumerate(all_results.get("metadatas", [])):
+                fn = meta.get("filename", "").lower() if meta else ""
+                fs = meta.get("file_stem", "").lower() if meta else ""
+                if stem_lower in fn or stem_lower in fs:
+                    filtered["ids"].append(all_results["ids"][idx])
+                    filtered["documents"].append(all_results["documents"][idx])
+                    filtered["metadatas"].append(all_results["metadatas"][idx])
+                    if all_results.get("embeddings") is not None and idx < len(all_results["embeddings"]):
+                        filtered["embeddings"].append(all_results["embeddings"][idx])
+            return filtered
+        except Exception as e:
+            print(f"[WARN] _get_embeddings_for_doc manual python filter failed: {e}")
+            
+        return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+
     # ------------------------------------------------------------------
     # Generation — Full-Context Mode (ưu tiên) & RAG Mode (fallback)
     # ------------------------------------------------------------------
@@ -728,13 +808,24 @@ class LLMService:
         print(f"[RAG Mode] {len(context_chunks)} chunks, {len(context):,} ký tự context...")
         return self._call_llm(messages, timeout=600.0)
 
-    def chat_direct(self, prompt: str, system_prompt: str = "") -> str:
-        """Chat trực tiếp với LLM (dùng cho Tóm Tắt, Tạo Bài Tập).
+    def chat_direct(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str:
+        """Chat trực tiếp với LLM (dùng cho Tóm Tắt, Tạo Bài Tập, Quiz).
 
         FIX: Gửi system_prompt qua role 'system' riêng biệt thay vì ghép vào user message.
         Việc ghép thành một string với prefix cố định khiến llama.cpp KV-cache nhận diện
         prefix giống nhau giữa các request → tái dùng KV-cache của request trước → câu hỏi
         bị "cache" từ tài liệu khác.
+
+        Params:
+        - temperature: Ghi đè nhiệt độ mặc định cho request này.
+        - seed: Random seed để phá vỡ KV-cache reuse trong llama.cpp.
+          Truyền random.randint(0, 2**31) để mỗi quiz batch hoàn toàn độc lập.
         """
         if system_prompt:
             # Truncate chỉ áp dụng cho user prompt (phần thay đổi mỗi request)
@@ -747,7 +838,7 @@ class LLMService:
             user_content = self._safe_truncate(prompt, self._max_content_chars)
             messages = [{"role": "user", "content": user_content}]
 
-        return self._call_llm(messages, timeout=600.0)
+        return self._call_llm(messages, timeout=600.0, temperature=temperature, seed=seed)
 
     # ------------------------------------------------------------------
     # NLI Verification

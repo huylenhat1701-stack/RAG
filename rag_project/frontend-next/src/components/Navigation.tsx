@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChatCircle, FileText, ChartBar, House, SignOut, Clock, Sun, Moon } from "@phosphor-icons/react";
+import { ChatCircle, FileText, ChartBar, House, SignOut, Clock, Sun, Moon, Brain, Certificate, Graph } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 export default function Navigation() {
@@ -45,6 +45,9 @@ export default function Navigation() {
     { name: "Hội thoại", href: "/chat", icon: ChatCircle },
     { name: "Lịch sử", href: "/history", icon: Clock },
     { name: "Đánh giá", href: "/evaluation", icon: ChartBar },
+    { name: "Quiz", href: "/quiz", icon: Brain },
+    { name: "Báo cáo", href: "/report", icon: Certificate },
+    { name: "Bản đồ", href: "/knowledge-graph", icon: Graph },
   ];
 
   if (!mounted || pathname === "/login") return null;
