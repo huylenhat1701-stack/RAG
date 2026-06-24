@@ -18,7 +18,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from backend.core.config import CHROMA_PERSIST_DIR, DATABASE_URL
 from backend.db.database import SessionLocal
 from backend.repositories.document_repo import DocumentRepository
-from backend.services.document_service import process_and_index_document
+from backend.services.document_service import process_and_index_document, get_safe_file_path
 
 import chromadb
 
@@ -54,7 +54,7 @@ def reindex_all():
         success = 0
         failed = 0
         for doc in indexed_docs:
-            file_path = Path(doc.file_path)
+            file_path = get_safe_file_path(doc.file_path)
             # Thử file extracted trước
             extracted_path = file_path.with_suffix(".extracted.txt")
             if extracted_path.exists():

@@ -30,6 +30,7 @@ from ..services.document_service import (
     save_upload_file,
     process_and_index_document,
     get_document_content,
+    get_safe_file_path,
 )
 from ..services.rag_service import answer_question, summarize_document, generate_exercise, generate_quiz, generate_learning_path
 from ..models.schemas import (
@@ -217,7 +218,7 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
     # Xóa file vật lý
-    file_path = Path(doc.file_path)
+    file_path = get_safe_file_path(doc.file_path)
     if file_path.exists():
         file_path.unlink()
     # Xóa file extracted nếu có
@@ -246,7 +247,7 @@ def download_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
-    file_path = Path(doc.file_path)
+    file_path = get_safe_file_path(doc.file_path)
     if source == "original":
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="File gốc không tồn tại")

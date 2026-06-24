@@ -63,8 +63,8 @@ class LLMService:
 
     # Token overhead: hệ thống prompt + câu hỏi + safety buffer
     _PROMPT_OVERHEAD_TOKENS = 400
-    # Tiếng Việt: an toàn với LLM local (khoảng 0.6 ký tự / token cho một số model)
-    _CHARS_PER_TOKEN = 0.6
+    # Tiếng Việt: tỷ lệ ký tự / token thực tế (khoảng 2.0 - 3.0 ký tự cho mỗi token tiếng Việt)
+    _CHARS_PER_TOKEN = 2.5
 
     def __init__(self):
         self._llm_base_url = LOCAL_LLM_API_BASE
@@ -507,10 +507,10 @@ class LLMService:
     def get_random_chunks_by_stem(self, stem: str, count: int = 5) -> List[ChunkDocument]:
         """Lấy ngẫu nhiên các chunk từ tài liệu bằng cách tìm tên file chứa stem.
 
-        Ưu tiên dùng ChromaDB filter trên field 'file_stem' (chậm nhỏ, không load toàn bộ RAM).
-        Fallback về Python filter nếu DB cũ chưa có metadata 'file_stem'.
-
-        Ví dụ: stem='BT Giai tich 2' khớp 'BT Giai tich 2.extracted.txt'
+        Hỗ trợ các trường hợp:
+        - file_stem exact match: 'BT Giai tich 2' → 'BT Giai tich 2'
+        - file_stem với suffix _N: 'Giáo-trình-CNKHXH' → 'Giáo-trình-CNKHXH_1'
+        - Fallback Python filter nếu ChromaDB không hỗ trợ $contains
         """
         if self._collection.count() == 0:
             return []
@@ -519,7 +519,7 @@ class LLMService:
         stem_lower = stem.lower()
 
         # -----------------------------------------------------------
-        # Ưu tiên: ChromaDB filter theo file_stem (chính xác, hiệu quả bộ nhớ)
+        # Ưu tiên 1: ChromaDB filter theo file_stem exact match
         # -----------------------------------------------------------
         try:
             results = self._collection.get(
@@ -538,20 +538,51 @@ class LLMService:
                             filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
                             file_stem=meta_val.get("file_stem", "") if meta_val else "",
                         ))
-                    print(f"[OK] get_random_chunks_by_stem: ChromaDB filter match {len(chunks)} chunks (stem={stem!r})")
+                    print(f"[OK] get_random_chunks_by_stem: exact match {len(chunks)} chunks (stem={stem!r})")
                     return chunks
         except Exception as e:
-            print(f"[WARN] ChromaDB filter failed ({e}), falling back to Python filter")
+            print(f"[WARN] ChromaDB exact filter failed ({e}), falling back")
+
+        # -----------------------------------------------------------
+        # Ưu tiên 2: ChromaDB filter theo filename $contains stem
+        # Xử lý trường hợp file được lưu với suffix _N (VD: Giáo-trình-CNKHXH_1.extracted.txt)
+        # -----------------------------------------------------------
+        try:
+            results = self._collection.get(
+                where={"filename": {"$contains": stem}},
+            )
+            if results.get("documents"):
+                items = list(zip(results["ids"], results["documents"], results["metadatas"]))
+                if items:
+                    if len(items) > count:
+                        items = random.sample(items, count)
+                    chunks = []
+                    for id_val, doc_val, meta_val in items:
+                        chunks.append(ChunkDocument(
+                            id=id_val,
+                            text=doc_val,
+                            filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
+                            file_stem=meta_val.get("file_stem", "") if meta_val else "",
+                        ))
+                    print(f"[OK] get_random_chunks_by_stem: $contains '{stem}' → {len(chunks)} chunks")
+                    return chunks
+        except Exception as e:
+            print(f"[WARN] ChromaDB $contains filter failed ({e}), falling back to filename list")
 
         # -----------------------------------------------------------
         # Fallback: DB cũ không có file_stem — thử filter theo filename exact match
+        # Bao gồm cả các biến thể _1, _2, _3 (unique naming suffix)
         # -----------------------------------------------------------
         try:
-            results = self._collection.get(where={"filename": {"$in": [
-                stem,                         # exact filename
-                f"{stem}.txt",               # plain text
-                f"{stem}.extracted.txt",     # PDF/DOCX extracted
-            ]}})
+            filename_variants = [
+                stem,                                # exact stem
+                f"{stem}.txt",                       # plain text
+                f"{stem}.extracted.txt",             # PDF/DOCX extracted
+                f"{stem}_1.extracted.txt",           # extracted với suffix _1
+                f"{stem}_2.extracted.txt",           # extracted với suffix _2
+                f"{stem}_3.extracted.txt",           # extracted với suffix _3
+            ]
+            results = self._collection.get(where={"filename": {"$in": filename_variants}})
             if results.get("documents"):
                 items = list(zip(results["ids"], results["documents"], results["metadatas"]))
                 if items:
@@ -564,10 +595,10 @@ class LLMService:
                             text=doc_val,
                             filename=meta_val.get("filename", "unknown") if meta_val else "unknown",
                         ))
-                    print(f"[OK] get_random_chunks_by_stem: filename filter match {len(chunks)} chunks")
+                    print(f"[OK] get_random_chunks_by_stem: filename variants match {len(chunks)} chunks")
                     return chunks
         except Exception as e:
-            print(f"[WARN] Filename filter failed ({e}), falling back to full-scan")
+            print(f"[WARN] Filename variants filter failed ({e}), falling back to full-scan")
 
         # -----------------------------------------------------------
         # Last resort fallback: load toàn bộ và filter bằng Python
@@ -589,7 +620,15 @@ class LLMService:
         for i in range(len(all_results["ids"])):
             meta = all_results["metadatas"][i] if all_results.get("metadatas") else {}
             fn = meta.get("filename", "") if meta else ""
-            if stem_lower in fn.lower():
+            fs = meta.get("file_stem", "") if meta else ""
+            # stem_lower phải là SUBSTRING của filename/file_stem — nhưng chỉ chấp nhận
+            # nếu là prefix trước dấu _ hoặc . để tránh nhầm 'CNPM' match 'CNKHXH'
+            fn_lower = fn.lower()
+            fs_lower = fs.lower()
+            if (fn_lower.startswith(stem_lower) or
+                    fs_lower.startswith(stem_lower) or
+                    fn_lower.startswith(stem_lower.replace(" ", "-")) or
+                    fs_lower.startswith(stem_lower.replace(" ", "-"))):
                 matching_items.append((
                     all_results["ids"][i],
                     all_results["documents"][i],
@@ -614,6 +653,7 @@ class LLMService:
     # ------------------------------------------------------------------
     # Generation — Full-Context Mode (ưu tiên) & RAG Mode (fallback)
     # ------------------------------------------------------------------
+
 
     def generate_answer_full_context(
         self,
@@ -689,16 +729,24 @@ class LLMService:
         return self._call_llm(messages, timeout=600.0)
 
     def chat_direct(self, prompt: str, system_prompt: str = "") -> str:
-        """Chat trực tiếp với LLM (dùng cho Tóm Tắt, Tạo Bài Tập)."""
+        """Chat trực tiếp với LLM (dùng cho Tóm Tắt, Tạo Bài Tập).
+
+        FIX: Gửi system_prompt qua role 'system' riêng biệt thay vì ghép vào user message.
+        Việc ghép thành một string với prefix cố định khiến llama.cpp KV-cache nhận diện
+        prefix giống nhau giữa các request → tái dùng KV-cache của request trước → câu hỏi
+        bị "cache" từ tài liệu khác.
+        """
         if system_prompt:
-            full_prompt = f"{system_prompt}\n\n{prompt}"
+            # Truncate chỉ áp dụng cho user prompt (phần thay đổi mỗi request)
+            user_content = self._safe_truncate(prompt, self._max_content_chars)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ]
         else:
-            full_prompt = prompt
+            user_content = self._safe_truncate(prompt, self._max_content_chars)
+            messages = [{"role": "user", "content": user_content}]
 
-        # Không cắt content — để model xử lý tối đa có thể
-        full_prompt = self._safe_truncate(full_prompt, self._max_content_chars)
-
-        messages = [{"role": "user", "content": full_prompt}]
         return self._call_llm(messages, timeout=600.0)
 
     # ------------------------------------------------------------------

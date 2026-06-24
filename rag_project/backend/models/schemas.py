@@ -104,6 +104,7 @@ class QuizQuestion(BaseModel):
     question: str
     options: dict          # {"A": "...", "B": "...", "C": "...", "D": "..."}
     answer: str            # "A" | "B" | "C" | "D"
+    correct_option: str = "" # Hỗ trợ tương thích ngược với Frontend sử dụng correct_option
     explanation: str = ""  # Giải thích tại sao đáp án đúng
     step_by_step_explanation: str = "" # CoT Math Tutor
     chunk_id: str = ""     # Để biết câu hỏi sinh từ đoạn kiến thức nào

@@ -1,4 +1,0 @@
-# Tài liệu Hướng dẫn Cơ bản
-Gemma là một mô hình ngôn ngữ lớn được phát triển bởi Google. Nó có nhiều kích thước khác nhau như 2B, 7B, 9B.
-Mô hình Gemma rất phù hợp để chạy cục bộ (local) trên các máy tính cá nhân thông qua phần mềm Ollama hoặc LM Studio.
-Để sử dụng RAG với Gemma, bạn cần một Vector Database như ChromaDB và mô hình embedding như sentence-transformers.

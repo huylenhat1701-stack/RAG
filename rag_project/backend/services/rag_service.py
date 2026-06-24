@@ -434,7 +434,24 @@ def generate_quiz(
             # Thử với stem của file gốc (không có extension)
             stem_name = Path(doc.file_name).stem
             target_chunks = llm_service.get_random_chunks_by_stem(stem_name, count=count)
-        print(f"[Quiz] Tìm được {len(target_chunks)} chunks ngẫu nhiên.")
+
+        # ── GUARD: lọc bỏ chunk không thuộc đúng tài liệu (tránh last-resort trả về chunk sai) ──
+        if target_chunks:
+            stem_name_lower = Path(doc.file_name).stem.lower()
+            doc_file_name_lower = doc.file_name.lower()
+            valid_chunks = [
+                c for c in target_chunks
+                if stem_name_lower in c.filename.lower()
+                   or doc_file_name_lower in c.filename.lower()
+            ]
+            if len(valid_chunks) < len(target_chunks):
+                print(
+                    f"[Quiz GUARD] Loại bỏ {len(target_chunks) - len(valid_chunks)} chunks "
+                    f"không thuộc tài liệu '{doc.file_name}' (last-resort trả về chunk sai)."
+                )
+            target_chunks = valid_chunks
+
+        print(f"[Quiz] Tìm được {len(target_chunks)} chunks hợp lệ cho '{doc.file_name}'.")
         
     all_questions: list = []
     batch_size = 3  # Tạo 3 câu/lần — model nhỏ dễ làm hơn
@@ -512,7 +529,16 @@ def _generate_quiz_batch(
 
     # ── Prompt sử dụng CoT cho các bài toán hoặc suy luận ──────────
     prompt = f"""Đọc đoạn văn sau và tạo {batch_count} câu hỏi trắc nghiệm (A/B/C/D).
-Nếu đây là dạng bài tập tính toán, hãy đảm bảo giải thích rõ từng bước bằng Toán học.
+YÊU CẦU QUAN TRỌNG VỀ TOÁN HỌC:
+1. Bắt buộc viết tất cả các biểu thức toán học, công thức, phương trình, biến số (ví dụ: $x$, $y$, $z$, $C$, $u$, $v$) và ký hiệu toán học ở cả phần câu hỏi ("question"), các tùy chọn ("options") và lời giải ("step_by_step_explanation") bằng định dạng LaTeX chuẩn:
+   - Sử dụng cặp dấu đô-la đơn $...$ cho công thức nằm trong dòng (inline math), ví dụ: $x + y = C$, $u(x, y, z)$.
+   - Sử dụng cặp dấu đô-la kép $$...$$ cho các công thức đứng riêng dòng (display math).
+2. KHÔNG sao chép các ký tự toán học bị lỗi font hoặc ký tự lạ từ văn bản gốc (ví dụ: các ô vuông, dấu ngoặc lạ  ). Hãy tự viết lại chúng bằng ký hiệu toán học chuẩn của LaTeX (ví dụ: dùng \\le cho nhỏ hơn hoặc bằng, \\ge cho lớn hơn hoặc bằng, \\int cho tích phân, \\partial cho đạo hàm riêng).
+
+YÊU CẦU QUAN TRỌNG VỀ NỘI DUNG VÀ ĐỊNH DẠNG:
+- Trường "question" CHỈ chứa câu hỏi thực tế.
+- TUYỆT ĐỐI KHÔNG được thêm bất kỳ câu chào hỏi, lời dẫn, lời giới thiệu, lời cảm ơn hay câu chuyển tiếp nào (ví dụ: "Tuyệt vời!", "Dựa trên đoạn văn...", "Chào bạn...", "Sau đây là câu hỏi...", "Câu hỏi 1:", "Câu hỏi 2:").
+- Đi thẳng vào nội dung câu hỏi một cách trực tiếp nhất.
 
 VĂN BẢN:
 {content_snippet}
@@ -521,11 +547,11 @@ Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì k
 
 [
   {{
-    "question": "Nội dung câu hỏi",
+    "question": "Nội dung câu hỏi thực tế (không có lời giới thiệu hay câu số thứ tự)",
     "options": {{"A": "Lựa chọn A", "B": "Lựa chọn B", "C": "Lựa chọn C", "D": "Lựa chọn D"}},
     "answer": "A",
     "explanation": "Giải thích ngắn gọn",
-    "step_by_step_explanation": "<reasoning>Bước 1: ... Bước 2: ...</reasoning> Dùng LaTeX nếu có công thức toán."
+    "step_by_step_explanation": "<reasoning>Bước 1: ... Bước 2: ...</reasoning> Dùng LaTeX cho công thức toán."
   }}
 ]
 """
@@ -533,7 +559,7 @@ Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì k
     try:
         raw = llm_service.chat_direct(
             prompt=prompt,
-            system_prompt="Bạn là giáo viên. Tạo câu hỏi trắc nghiệm bằng tiếng Việt theo đúng mẫu được yêu cầu."
+            system_prompt="Bạn là giáo viên. Tạo câu hỏi trắc nghiệm bằng tiếng Việt theo đúng mẫu được yêu cầu. Tuyệt đối không thêm bất kỳ câu chào hay lời dẫn nào vào nội dung câu hỏi."
         )
     except RuntimeError as e:
         err_str = str(e)
@@ -611,43 +637,165 @@ def _clean_ai_preamble(raw: str) -> str:
 def _clean_question_text(text: str) -> str:
     """
     Làm sạch text câu hỏi:
+    - Xóa các câu giới thiệu/lời dẫn/lời chào của AI (preamble)
     - Xóa prefix 'Câu N:' nếu sót lại trong nội dung
     - Xóa markdown bold/italic
     - Strip khoảng trắng thừa
     """
-    text = re.sub(r'^(?:Câu\s*\d+[:\.\s]+|Question\s*\d+[:\.\s]+)', '', text.strip(), flags=re.IGNORECASE)
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = re.sub(r'__(.+?)__', r'\1', text)
-    return text.strip()
+    text = text.strip()
+    if not text:
+        return ""
+
+    # Normalize cases where "Câu hỏi 1:" is embedded inside a sentence without proper period separation
+    # e.g., "Dưới đây là câu hỏi: Câu hỏi 1: Hãy chọn..." -> "Dưới đây là câu hỏi. Câu hỏi 1: Hãy chọn..."
+    text = re.sub(r'([^.!?\n\s])\s+(Câu\s*hỏi\s*\d+|Câu\s*\d+|Question\s*\d+)([:\.\s\-])', r'\1. \2\3', text, flags=re.IGNORECASE)
+
+    # Split the text into parts (sentences or clauses) by periods, exclamation marks, or question marks followed by space
+    parts = re.split(r'([\.!\?]\s+)', text)
+    
+    # Reconstruct sentences
+    sentences = []
+    current = ""
+    for part in parts:
+        if re.match(r'^[\.!\?]\s+$', part):
+            current += part.strip()
+            sentences.append(current)
+            current = ""
+        else:
+            current += part
+    if current:
+        sentences.append(current)
+
+    cleaned_sentences = []
+    is_preamble_phase = True
+
+    # Preamble trigger words/phrases (case insensitive)
+    excl_patterns = [
+        r'^(tuyệt vời|chắc chắn rồi|tất nhiên|tất nhiên rồi|chào bạn|ok|được chứ|tất nhiên là được)[!\.\s]*$',
+        r'^(dưới đây|sau đây|đây) là\s+(?:các|một số|câu hỏi|bộ câu hỏi)[^!\.\?]*$',
+        r'^tôi xin gửi[^!\.\?]*$',
+        r'^theo yêu cầu của bạn[^!\.\?]*$',
+    ]
+
+    def is_preamble(sentence: str) -> bool:
+        s = sentence.lower().strip()
+        # Clean trailing punctuation for easier matching
+        s_clean = re.sub(r'[\.!\?:\s]+$', '', s).strip()
+        if not s_clean:
+            return True
+        
+        # If it matches any standalone pattern
+        for pat in excl_patterns:
+            if re.match(pat, s_clean):
+                return True
+        
+        # Check if sentence contains AI action + quiz reference
+        has_ai = any(w in s_clean for w in ["tôi sẽ", "tôi đã", "tôi xin", "sẽ tạo", "sẽ giúp", "tôi tạo", "tạo ra", "sinh ra", "thiết lập", "cung cấp câu hỏi", "gửi đến bạn", "tôi gửi"])
+        has_quiz = any(w in s_clean for w in ["câu hỏi", "trắc nghiệm", "đáp án", "lựa chọn", "quiz", "bài tập"])
+        if has_ai and has_quiz:
+            return True
+
+        # Check if sentence references "đoạn văn bạn cung cấp" or "tài liệu" or "yêu cầu"
+        has_source = any(w in s_clean for w in ["bạn cung cấp", "bạn đã gửi", "đoạn văn trên", "văn bản trên", "tài liệu trên", "nội dung trên", "yêu cầu của bạn"])
+        if has_source and (has_quiz or has_ai or "dưới đây" in s_clean or "sau đây" in s_clean):
+            return True
+            
+        # Check if it starts with "dưới đây là" or "sau đây là" and contains "câu hỏi" / "trắc nghiệm"
+        if (s_clean.startswith("dưới đây là") or s_clean.startswith("sau đây là")) and any(w in s_clean for w in ["câu hỏi", "trắc nghiệm", "đáp án", "lựa chọn", "bộ đề", "bài tập"]):
+            return True
+
+        return False
+
+    for sentence in sentences:
+        if is_preamble_phase:
+            if is_preamble(sentence):
+                # Skip this sentence as it's a preamble
+                continue
+            else:
+                is_preamble_phase = False
+                cleaned_sentences.append(sentence)
+        else:
+            cleaned_sentences.append(sentence)
+
+    cleaned_text = " ".join(cleaned_sentences).strip()
+
+    # Clean up prefix like "Câu hỏi 1:", "Câu 1:", "Question 1:", "Câu hỏi:"
+    cleaned_text = re.sub(
+        r'^(?:Câu\s*hỏi\s*\d+[:\.\s\-]*|Câu\s*\d+[:\.\s\-]*|Question\s*\d+[:\.\s\-]*|Câu\s*hỏi[:\.\s\-]*|Câu\s*hỏi\s*thứ\s*\w+[:\.\s\-]*)',
+        '',
+        cleaned_text,
+        flags=re.IGNORECASE
+    )
+
+    # Strip markdown bold/italic
+    cleaned_text = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned_text)
+    cleaned_text = re.sub(r'\*(.+?)\*', r'\1', cleaned_text)
+    cleaned_text = re.sub(r'__(.+?)__', r'\1', cleaned_text)
+
+    # Fallback to avoid empty output
+    if not cleaned_text.strip():
+        basic_clean = re.sub(
+            r'^(?:Câu\s*hỏi\s*\d+[:\.\s\-]*|Câu\s*\d+[:\.\s\-]*|Question\s*\d+[:\.\s\-]*)',
+            '',
+            text,
+            flags=re.IGNORECASE
+        )
+        return basic_clean.strip()
+
+    return cleaned_text.strip()
+
+
+_LONE_BACKSLASH_RE = re.compile(r'(?<!\\)\\(?!(?:["\\/]|[ntrbf](?![a-zA-Z])|u[0-9a-fA-F]{4}))')
+
+
+def _sanitize_json_backslashes(text: str) -> str:
+    """Escape lone backslashes that are not valid JSON escape sequences.
+    
+    LLMs often emit LaTeX like \\frac inside JSON strings as a single backslash
+    (\\frac), which is an invalid JSON escape.  We double every backslash that
+    is NOT already part of a recognised JSON escape sequence so that json.loads
+    can parse the result.
+    """
+    return _LONE_BACKSLASH_RE.sub(r'\\\\', text)
 
 
 def _try_parse_json(raw: str) -> list:
     """Thử parse JSON từ response. Trả None nếu thất bại."""
     raw = raw.strip()
 
-    # Thử parse thẳng
-    try:
-        data = json.loads(raw)
+    def _loads(s: str):
+        """Try json.loads on the original string, then on the backslash-sanitized version."""
+        try:
+            return json.loads(s)
+        except Exception:
+            pass
+        try:
+            return json.loads(_sanitize_json_backslashes(s))
+        except Exception:
+            return None
+
+    # 1. Thử parse thẳng
+    data = _loads(raw)
+    if isinstance(data, list) and data:
+        return data
+
+    # 2. Tìm theo markdown codeblock ```json ... ```
+    md_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', raw, re.DOTALL)
+    if md_match:
+        data = _loads(md_match.group(1))
         if isinstance(data, list) and data:
             return data
-    except Exception:
-        pass
 
-    # Tìm JSON array trong text
-    for pattern in [
-        r'\[\s*\{.*?\}\s*\]',
-        r'```(?:json)?\s*(\[.*?\])\s*```',
-    ]:
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            try:
-                s = match.group(1) if match.lastindex else match.group()
-                data = json.loads(s)
-                if isinstance(data, list) and data:
-                    return data
-            except Exception:
-                pass
+    # 3. Quét ngược từ dấu ] cuối cùng (Bypass lỗi LaTeX '}' ngay trước ']')
+    start_idx = raw.find('[')
+    if start_idx != -1:
+        pos = raw.rfind(']')
+        while pos > start_idx:
+            candidate = raw[start_idx:pos+1]
+            data = _loads(candidate)
+            if isinstance(data, list) and data:
+                return data
+            pos = raw.rfind(']', start_idx, pos)
 
     return None
 
@@ -770,6 +918,7 @@ def _parse_numbered_fallback(raw: str, start_index: int) -> list:
                     question=q_text,
                     options=opts,
                     answer=answer,
+                    correct_option=answer,
                     explanation=expl,
                 ))
             i = j
@@ -794,9 +943,10 @@ def _normalize_question(q: dict, idx: int) -> QuizQuestion:
 
     return QuizQuestion(
         id=idx,
-        question=str(q.get("question", f"Câu hỏi {idx}")),
+        question=_clean_question_text(str(q.get("question", f"Câu hỏi {idx}"))),
         options=options,
         answer=answer,
+        correct_option=answer,
         explanation=str(q.get("explanation", "")),
         step_by_step_explanation=str(q.get("step_by_step_explanation", "")),
         chunk_id=""
