@@ -1,0 +1,206 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #f8f9fa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --border: rgba(9, 9, 11, 0.08);
+  --ring: rgba(9, 9, 11, 0.03);
+  --accent-color: #3b82f6;
+  --accent-color-hover: #2563eb;
+  --muted: #71717a;
+  
+  --font-plus-jakarta: var(--font-plus-jakarta);
+}
+
+/* Explicit light theme class */
+html.light {
+  --background: #f8f9fa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --border: rgba(9, 9, 11, 0.08);
+  --ring: rgba(9, 9, 11, 0.03);
+  --accent-color: #3b82f6;
+  --accent-color-hover: #2563eb;
+  --muted: #71717a;
+}
+
+/* Explicit dark theme class */
+html.dark {
+  --background: #050505;
+  --foreground: #f4f4f5;
+  --card: #0c0c0e;
+  --card-foreground: #f4f4f5;
+  --border: rgba(255, 255, 255, 0.08);
+  --ring: rgba(255, 255, 255, 0.03);
+  --accent-color: #10b981;
+  --accent-color-hover: #059669;
+  --muted: #a1a1aa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-accent-color: var(--accent-color);
+  --color-accent-color-hover: var(--accent-color-hover);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-plus-jakarta);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  font-family: var(--font-plus-jakarta), sans-serif;
+  scroll-behavior: smooth;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Premium smooth transitions */
+.transition-premium {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  transition-duration: 700ms;
+}
+
+.transition-premium-fast {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  transition-duration: 400ms;
+}
+
+/* Double Bezel Doppelrand Style */
+.double-bezel-outer {
+  background: rgba(120, 120, 120, 0.03);
+  border: 1px solid var(--border);
+  padding: 0.375rem;
+  border-radius: 2rem;
+}
+
+.dark .double-bezel-outer {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.double-bezel-inner {
+  background: var(--card);
+  border-radius: calc(2rem - 0.375rem);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.light .double-bezel-inner {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+/* Ambient glows */
+.mesh-glow-violet {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.01) 60%, transparent 100%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.mesh-glow-emerald {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, rgba(16, 185, 129, 0.01) 60%, transparent 100%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+/* Prose Typography Theme Overrides to fix low contrast font colors */
+.prose {
+  --tw-prose-body: #27272a; /* zinc-800 for high readability in light theme */
+  --tw-prose-headings: #09090b; /* zinc-950 */
+  --tw-prose-lead: #3f3f46;
+  --tw-prose-links: var(--accent-color);
+  --tw-prose-bold: #09090b;
+  --tw-prose-counters: #71717a;
+  --tw-prose-bullets: #a1a1aa; /* zinc-400 */
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: #09090b;
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-captions: #71717a;
+  --tw-prose-code: #09090b;
+  --tw-prose-pre-code: #f4f4f5;
+  --tw-prose-pre-bg: #18181b;
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+
+.dark .prose {
+  --tw-prose-body: #e4e4e7; /* zinc-200 for high readability in dark theme */
+  --tw-prose-headings: #ffffff;
+  --tw-prose-lead: #a1a1aa;
+  --tw-prose-links: var(--accent-color);
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #a1a1aa;
+  --tw-prose-bullets: #52525b; /* zinc-600 */
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: #ffffff;
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-captions: #a1a1aa;
+  --tw-prose-code: #ffffff;
+  --tw-prose-pre-code: #e4e4e7;
+  --tw-prose-pre-bg: #09090b;
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+
+/* docx-preview styling overrides */
+.docx-preview-container .docx {
+  background: #ffffff !important;
+  box-shadow: none !important;
+  padding: 2rem !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+  color: #000000 !important;
+}
+
+.dark .docx-preview-container .docx {
+  background: #18181b !important;
+  color: #f4f4f5 !important;
+}
+
+.docx-preview-container .docx_wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.docx-preview-container .docx_wrapper section.docx {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05) !important;
+  margin-bottom: 2rem !important;
+  border-radius: 1.5rem !important;
+  border: 1px solid var(--border) !important;
+  background: var(--card) !important;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}

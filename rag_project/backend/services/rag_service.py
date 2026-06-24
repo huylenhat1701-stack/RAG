@@ -5,6 +5,7 @@ Full-Context Edition: tự động chọn chế độ đọc toàn bộ hoặc R
 
 import json
 import re
+import random
 from pathlib import Path
 from typing import List
 from sqlalchemy.orm import Session
@@ -354,6 +355,13 @@ def summarize_document(
         model_used=llm_service._model_name,
     )
 
+BLOOM_PROMPTS = {
+    "remember":   "Sinh câu hỏi yêu cầu nhớ lại CHÍNH XÁC định nghĩa, khái niệm, công thức từ tài liệu.",
+    "understand": "Sinh câu hỏi yêu cầu giải thích bằng lời, so sánh hoặc phân loại khái niệm.",
+    "apply":      "Sinh bài toán hoặc tình huống thực tế yêu cầu áp dụng kiến thức để giải quyết.",
+    "analyze":    "Sinh câu hỏi phân tích nguyên nhân-kết quả, đánh giá ưu nhược điểm hoặc suy luận logic.",
+}
+
 
 def generate_exercise(
     doc_id: int,
@@ -401,6 +409,7 @@ def generate_quiz(
     db: Session,
     llm_service: LLMService,
     session_id: str = "default_user",
+    bloom_level: str = None,
 ) -> QuizResponse:
     """
     Tạo bộ câu hỏi thi trắc nghiệm sử dụng Adaptive Learning (BKT).
@@ -418,24 +427,62 @@ def generate_quiz(
     # Lấy weak chunks từ AdaptiveTutorService
     from ..services.adaptive_tutor_service import adaptive_tutor_service
     weak_chunk_ids = adaptive_tutor_service.get_weak_chunks(session_id, doc_id, db)
-    
+
+    # Pool size lớn hơn để có nhiều lựa chọn đa dạng (count * 3, tối thiểu 15)
+    pool_size = max(15, count * 3)
+
+    def _fetch_random_pool(size: int):
+        """Lấy pool chunk ngẫu nhiên từ tài liệu, thử nhiều cách tên file."""
+        chunks = llm_service.get_random_chunks(doc.file_name, count=size)
+        if not chunks:
+            extracted_name = Path(doc.file_path).stem + ".extracted.txt"
+            chunks = llm_service.get_random_chunks(extracted_name, count=size)
+        if not chunks:
+            stem_name = Path(doc.file_name).stem
+            chunks = llm_service.get_random_chunks_by_stem(stem_name, count=size)
+        # ── GUARD: lọc bỏ chunk không thuộc đúng tài liệu ──
+        if chunks:
+            stem_lower = Path(doc.file_name).stem.lower()
+            fname_lower = doc.file_name.lower()
+            valid = [
+                c for c in chunks
+                if stem_lower in c.filename.lower()
+                   or fname_lower in c.filename.lower()
+            ]
+            dropped = len(chunks) - len(valid)
+            if dropped:
+                print(
+                    f"[Quiz GUARD] Loại bỏ {dropped} chunks không thuộc "
+                    f"'{doc.file_name}' (last-resort trả về chunk sai)."
+                )
+            chunks = valid
+        return chunks
+
     if weak_chunk_ids:
-        print(f"[Adaptive Tutor] Tìm thấy {len(weak_chunk_ids)} chunks yếu, ưu tiên tạo câu hỏi từ đây.")
-        target_chunks = llm_service.get_chunks_by_ids(weak_chunk_ids)
+        print(f"[Adaptive Tutor] Tìm thấy {len(weak_chunk_ids)} chunks yếu.")
+        # ── Mixed sampling: tối đa 50% từ weak, phần còn lại lấy random ──
+        # Tránh BKT lock-in: không để weak chunks chiếm toàn bộ quiz mãi mãi.
+        max_weak = max(1, count // 2)
+        sampled_weak_ids = random.sample(weak_chunk_ids, min(max_weak, len(weak_chunk_ids)))
+        weak_chunks = llm_service.get_chunks_by_ids(sampled_weak_ids)
+        weak_id_set = {c.id for c in weak_chunks}
+        print(f"[Adaptive Tutor] Dùng {len(weak_chunks)} weak chunks (≤50%), bổ sung random.")
+
+        # Lấy random pool để bù phần còn lại
+        random_pool = _fetch_random_pool(pool_size)
+        extra_chunks = [c for c in random_pool if c.id not in weak_id_set]
+        # Kết hợp và shuffle để câu hỏi không theo thứ tự cố định
+        combined = weak_chunks + extra_chunks
+        random.shuffle(combined)
+        target_chunks = combined
     else:
         print(f"[Adaptive Tutor] User chưa có dữ liệu yếu, tạo ngẫu nhiên.")
-        # ChromaDB lưu chunk với tên file .extracted.txt (với PDF/DOCX)
-        # Thử cả tên gốc và tên .extracted.txt
-        target_chunks = llm_service.get_random_chunks(doc.file_name, count=count)
-        if not target_chunks:
-            extracted_name = Path(doc.file_path).stem + ".extracted.txt"
-            target_chunks = llm_service.get_random_chunks(extracted_name, count=count)
-        if not target_chunks:
-            # Thử với stem của file gốc (không có extension)
-            stem_name = Path(doc.file_name).stem
-            target_chunks = llm_service.get_random_chunks_by_stem(stem_name, count=count)
-        print(f"[Quiz] Tìm được {len(target_chunks)} chunks ngẫu nhiên.")
-        
+        target_chunks = _fetch_random_pool(pool_size)
+        if target_chunks:
+            random.shuffle(target_chunks)
+
+        print(f"[Quiz] Tìm được {len(target_chunks)} chunks hợp lệ cho '{doc.file_name}'.")
+
     all_questions: list = []
     batch_size = 3  # Tạo 3 câu/lần — model nhỏ dễ làm hơn
     q_index = 1
@@ -451,7 +498,8 @@ def generate_quiz(
                 filename=doc.file_name,
                 batch_count=min(2, count - len(all_questions)),
                 start_index=q_index,
-                chunk_id=chunk.id
+                chunk_id=chunk.id,
+                bloom_level=bloom_level,
             )
             all_questions.extend(batch_qs)
             q_index += len(batch_qs)
@@ -474,7 +522,8 @@ def generate_quiz(
                 filename=doc.file_name,
                 batch_count=batch_count,
                 start_index=q_index,
-                chunk_id=""
+                chunk_id="",
+                bloom_level=bloom_level,
             )
             all_questions.extend(batch_qs)
             q_index += len(batch_qs)
@@ -502,38 +551,59 @@ def _generate_quiz_batch(
     batch_count: int,
     start_index: int,
     chunk_id: str = "",
+    bloom_level: str = None,
 ) -> list:
     """Tạo một batch nhỏ câu hỏi với Chain-of-Thought (CoT)."""
 
-    # Giới hạn nội dung tối đa cho model nhỏ (tránh vượt context window)
-    # 1200 ký tự ≈ 600 token (tiếng Việt) + overhead prompt + JSON output ≈ an toàn cho model 4096 token
-    MAX_QUIZ_CONTENT_CHARS = 1200
+    MAX_QUIZ_CONTENT_CHARS = 2000  # Tăng từ 1200 → 2000 để AI thấy đủ nội dung đa dạng
     content_snippet = content[:MAX_QUIZ_CONTENT_CHARS]
+    request_seed = random.randint(0, 2**31 - 1)
 
-    # ── Prompt sử dụng CoT cho các bài toán hoặc suy luận ──────────
-    prompt = f"""Đọc đoạn văn sau và tạo {batch_count} câu hỏi trắc nghiệm (A/B/C/D).
-Nếu đây là dạng bài tập tính toán, hãy đảm bảo giải thích rõ từng bước bằng Toán học.
+    bloom_instruction = ""
+    if bloom_level and bloom_level in BLOOM_PROMPTS:
+        bloom_instruction = f"""
+YÊU CẦU VỀ CẤP ĐỘ NHẬN THỨC (BLOOM'S TAXONOMY):
+- Cấp độ yêu cầu: {bloom_level.upper()}
+- Hướng dẫn: {BLOOM_PROMPTS[bloom_level]}
+- BẮT BUỘC tất cả câu hỏi được tạo ra trong batch này phải tuân thủ đúng yêu cầu nhận thức trên.
+"""
 
-VĂN BẢN:
+    prompt = f"""Dưới đây là một đoạn văn. Hãy tạo đúng {batch_count} câu hỏi trắc nghiệm (A/B/C/D) dựa hoàn toàn vào nội dung đoạn văn này.
+{bloom_instruction}
+YÊU CẦU VỀ TOÁN HỌC:
+1. Viết tất cả công thức, biểu thức, biến số toán học bằng LaTeX:
+   - Inline: $x + y = C$, $u(x, y)$
+   - Display: $$\\int_a^b f(x)\\,dx$$
+2. KHÔNG sao chép ký tự bị lỗi font, hãy viết lại bằng LaTeX chuẩn.
+
+YÊU CẦU VỀ NỘI DUNG:
+- Mỗi câu hỏi phải kiểm tra một kiến thức khác nhau từ đoạn văn.
+- Câu hỏi ngắn gọn, rõ ý, bám sát nội dung.
+- KHÔNG đưa bất kỳ lời chào, lời dẫn, hay câu giới thiệu nào vào nội dung câu hỏi.
+
+ĐOẠN VĂN:
 {content_snippet}
 
-Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì khác.
+Trả kết quả dưới dạng JSON array, mỗi phần tử là một object với các trường:
+- "question": nội dung câu hỏi (không có số thứ tự hay lời dẫn)
+- "options": object gồm 4 key "A", "B", "C", "D"
+- "answer": một trong các giá trị "A", "B", "C", "D"
+- "explanation": giải thích ngắn vì sao đáp án đúng
+- "step_by_step_explanation": "<reasoning>Bước 1: ... Bước 2: ...</reasoning>"
+- "bloom_level": một trong các giá trị "remember" (Nhớ), "understand" (Hiểu), "apply" (Vận dụng), "analyze" (Phân tích) để phân loại đúng cấp độ nhận thức của câu hỏi này.
 
-[
-  {{
-    "question": "Nội dung câu hỏi",
-    "options": {{"A": "Lựa chọn A", "B": "Lựa chọn B", "C": "Lựa chọn C", "D": "Lựa chọn D"}},
-    "answer": "A",
-    "explanation": "Giải thích ngắn gọn",
-    "step_by_step_explanation": "<reasoning>Bước 1: ... Bước 2: ...</reasoning> Dùng LaTeX nếu có công thức toán."
-  }}
-]
-"""
+Chỉ trả về JSON array, KHÔNG thêm bất kỳ văn bản nào khác trước hoặc sau."""
 
     try:
         raw = llm_service.chat_direct(
             prompt=prompt,
-            system_prompt="Bạn là giáo viên. Tạo câu hỏi trắc nghiệm bằng tiếng Việt theo đúng mẫu được yêu cầu."
+            system_prompt=(
+                "Bạn là giáo viên. Hãy trả kết quả là một JSON array đúng định dạng. "
+                "Không đưa bất kỳ lời chào, lời giới thiệu, lời cảm ơn hay văn bản thừa nào "
+                "trước hoặc sau JSON. Bắt đầu bằng '[' và kết thúc bằng ']'."
+            ),
+            temperature=0.7,
+            seed=request_seed,
         )
     except RuntimeError as e:
         err_str = str(e)
@@ -542,13 +612,15 @@ Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì k
             print(f"[Quiz] Context quá lớn, thử lại với nội dung 500 ký tự...")
             short_content = content[:500]
             short_prompt = (
-                f"Tạo {batch_count} câu hỏi trắc nghiệm từ đoạn văn này (JSON array):\n\n"
-                f"{short_content}\n\n"
-                f'[{{"question":"...","options":{{"A":"","B":"","C":"","D":""}},"answer":"A","explanation":""}}]'
+                f"Tạo {batch_count} câu hỏi trắc nghiệm (A/B/C/D) từ đoạn văn sau. "
+                f"Chỉ trả về JSON array, không thêm văn bản nào khác.\n\n"
+                f"ĐOẠN VĂN:\n{short_content}"
             )
             raw = llm_service.chat_direct(
                 prompt=short_prompt,
-                system_prompt="Tạo câu hỏi trắc nghiệm tiếng Việt dạng JSON array."
+                system_prompt="Tạo câu hỏi trắc nghiệm tiếng Việt dạng JSON array. Không thêm bất kỳ văn bản nào khác.",
+                temperature=0.7,
+                seed=random.randint(0, 2**31 - 1),
             )
         else:
             raise
@@ -559,7 +631,7 @@ Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì k
     # Thử JSON trước
     json_result = _try_parse_json(raw)
     if json_result:
-        qs = [_normalize_question(q, start_index + i) for i, q in enumerate(json_result)]
+        qs = [_normalize_question(q, start_index + i, default_bloom=bloom_level) for i, q in enumerate(json_result)]
         for q in qs:
             q.chunk_id = chunk_id
         return qs
@@ -568,21 +640,46 @@ Viết kết quả dưới dạng JSON với cấu trúc sau, KHÔNG thêm gì k
     qs = _parse_text_format(raw, start_index)
     for q in qs:
         q.chunk_id = chunk_id
+        if not q.bloom_level:
+            q.bloom_level = bloom_level or "remember"
     return qs
 
 
 def _clean_ai_preamble(raw: str) -> str:
     """
-    Xóa bỏ những dòng 'rác' mà model nhỏ thường thêm vào trước câu hỏi:
+    Xóa bỏ những phần 'rác' mà model nhỏ thường thêm vào:
     - Lời cảm ơn / xác nhận: "Tuyệt vời!", "Chắc chắn rồi!", "Dưới đây là..."
     - Markdown bold: **text**
-    - Câu giới thiệu trước block câu hỏi đầu tiên
+    - Văn bản dưới dạng câu giới thiệu trước JSON array
+
+    Chiến lược ưu tiên:
+    1. Nếu output là ```json ... ``` block → lấy nội dung bên trong
+    2. Nếu có JSON array `[` nào đó trong output → cắt từ `[` đầu tiên
+    3. Nếu là text format "Câu N:" → cắt từ dòng câu hỏi đầu tiên
+    4. Fallback: xóa markdown, giữ nguyên
     """
+    # ── Bước 1: xử lý ```json ... ``` fenced block ──────────────────────────────────────
+    fenced = re.search(r'```(?:json)?\s*\n?(.*?)```', raw, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        return fenced.group(1).strip()
+
+    # ── Bước 2: có dấu `[` → cắt bỏ mọi thứ trước nó ──────────────────────────────
+    bracket_pos = raw.find('[')
+    if bracket_pos > 0:  # > 0 nghĩa là có text trước `[`
+        candidate = raw[bracket_pos:].strip()
+        # Kiểm tra candidate có phải JSON hợp lệ không (tối thiểu là 1 object)
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, list):
+                return candidate  # JSON hợp lệ, trả về
+        except json.JSONDecodeError:
+            pass  # Không hợp lệ, thử tìm cách khác
+
+    # ── Bước 3: text format "Câu N:" → cắt từ dòng câu hỏi đầu tiên ─────────────────
     lines = raw.splitlines()
     result_lines = []
     found_first_question = False
 
-    # Pattern nhận biết dòng bắt đầu một câu hỏi
     question_start = re.compile(
         r'^(?:Câu\s*\d+[:\.]|\*\*Câu\s*\d+\*\*|Question\s*\d+[:\.]|\d+[\.)\:])',
         re.IGNORECASE
@@ -592,15 +689,13 @@ def _clean_ai_preamble(raw: str) -> str:
         if question_start.match(line.strip()):
             found_first_question = True
         if found_first_question:
-            # Xóa markdown bold/italic trong mọi dòng
             clean = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
             clean = re.sub(r'\*(.+?)\*', r'\1', clean)
             clean = re.sub(r'__(.+?)__', r'\1', clean)
             result_lines.append(clean)
 
-    # Nếu không tìm thấy cấu trúc "Câu N:" → giữ nguyên (dể fallback parse)
+    # ── Bước 4: fallback — xóa markdown, giữ nguyên ──────────────────────────────────────
     if not result_lines:
-        # Vẫn xóa markdown
         cleaned = re.sub(r'\*\*(.+?)\*\*', r'\1', raw)
         cleaned = re.sub(r'\*(.+?)\*', r'\1', cleaned)
         return cleaned
@@ -611,43 +706,165 @@ def _clean_ai_preamble(raw: str) -> str:
 def _clean_question_text(text: str) -> str:
     """
     Làm sạch text câu hỏi:
+    - Xóa các câu giới thiệu/lời dẫn/lời chào của AI (preamble)
     - Xóa prefix 'Câu N:' nếu sót lại trong nội dung
     - Xóa markdown bold/italic
     - Strip khoảng trắng thừa
     """
-    text = re.sub(r'^(?:Câu\s*\d+[:\.\s]+|Question\s*\d+[:\.\s]+)', '', text.strip(), flags=re.IGNORECASE)
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = re.sub(r'__(.+?)__', r'\1', text)
-    return text.strip()
+    text = text.strip()
+    if not text:
+        return ""
+
+    # Normalize cases where "Câu hỏi 1:" is embedded inside a sentence without proper period separation
+    # e.g., "Dưới đây là câu hỏi: Câu hỏi 1: Hãy chọn..." -> "Dưới đây là câu hỏi. Câu hỏi 1: Hãy chọn..."
+    text = re.sub(r'([^.!?\n\s])\s+(Câu\s*hỏi\s*\d+|Câu\s*\d+|Question\s*\d+)([:\.\s\-])', r'\1. \2\3', text, flags=re.IGNORECASE)
+
+    # Split the text into parts (sentences or clauses) by periods, exclamation marks, or question marks followed by space
+    parts = re.split(r'([\.!\?]\s+)', text)
+    
+    # Reconstruct sentences
+    sentences = []
+    current = ""
+    for part in parts:
+        if re.match(r'^[\.!\?]\s+$', part):
+            current += part.strip()
+            sentences.append(current)
+            current = ""
+        else:
+            current += part
+    if current:
+        sentences.append(current)
+
+    cleaned_sentences = []
+    is_preamble_phase = True
+
+    # Preamble trigger words/phrases (case insensitive)
+    excl_patterns = [
+        r'^(tuyệt vời|chắc chắn rồi|tất nhiên|tất nhiên rồi|chào bạn|ok|được chứ|tất nhiên là được)[!\.\s]*$',
+        r'^(dưới đây|sau đây|đây) là\s+(?:các|một số|câu hỏi|bộ câu hỏi)[^!\.\?]*$',
+        r'^tôi xin gửi[^!\.\?]*$',
+        r'^theo yêu cầu của bạn[^!\.\?]*$',
+    ]
+
+    def is_preamble(sentence: str) -> bool:
+        s = sentence.lower().strip()
+        # Clean trailing punctuation for easier matching
+        s_clean = re.sub(r'[\.!\?:\s]+$', '', s).strip()
+        if not s_clean:
+            return True
+        
+        # If it matches any standalone pattern
+        for pat in excl_patterns:
+            if re.match(pat, s_clean):
+                return True
+        
+        # Check if sentence contains AI action + quiz reference
+        has_ai = any(w in s_clean for w in ["tôi sẽ", "tôi đã", "tôi xin", "sẽ tạo", "sẽ giúp", "tôi tạo", "tạo ra", "sinh ra", "thiết lập", "cung cấp câu hỏi", "gửi đến bạn", "tôi gửi"])
+        has_quiz = any(w in s_clean for w in ["câu hỏi", "trắc nghiệm", "đáp án", "lựa chọn", "quiz", "bài tập"])
+        if has_ai and has_quiz:
+            return True
+
+        # Check if sentence references "đoạn văn bạn cung cấp" or "tài liệu" or "yêu cầu"
+        has_source = any(w in s_clean for w in ["bạn cung cấp", "bạn đã gửi", "đoạn văn trên", "văn bản trên", "tài liệu trên", "nội dung trên", "yêu cầu của bạn"])
+        if has_source and (has_quiz or has_ai or "dưới đây" in s_clean or "sau đây" in s_clean):
+            return True
+            
+        # Check if it starts with "dưới đây là" or "sau đây là" and contains "câu hỏi" / "trắc nghiệm"
+        if (s_clean.startswith("dưới đây là") or s_clean.startswith("sau đây là")) and any(w in s_clean for w in ["câu hỏi", "trắc nghiệm", "đáp án", "lựa chọn", "bộ đề", "bài tập"]):
+            return True
+
+        return False
+
+    for sentence in sentences:
+        if is_preamble_phase:
+            if is_preamble(sentence):
+                # Skip this sentence as it's a preamble
+                continue
+            else:
+                is_preamble_phase = False
+                cleaned_sentences.append(sentence)
+        else:
+            cleaned_sentences.append(sentence)
+
+    cleaned_text = " ".join(cleaned_sentences).strip()
+
+    # Clean up prefix like "Câu hỏi 1:", "Câu 1:", "Question 1:", "Câu hỏi:"
+    cleaned_text = re.sub(
+        r'^(?:Câu\s*hỏi\s*\d+[:\.\s\-]*|Câu\s*\d+[:\.\s\-]*|Question\s*\d+[:\.\s\-]*|Câu\s*hỏi[:\.\s\-]*|Câu\s*hỏi\s*thứ\s*\w+[:\.\s\-]*)',
+        '',
+        cleaned_text,
+        flags=re.IGNORECASE
+    )
+
+    # Strip markdown bold/italic
+    cleaned_text = re.sub(r'\*\*(.+?)\*\*', r'\1', cleaned_text)
+    cleaned_text = re.sub(r'\*(.+?)\*', r'\1', cleaned_text)
+    cleaned_text = re.sub(r'__(.+?)__', r'\1', cleaned_text)
+
+    # Fallback to avoid empty output
+    if not cleaned_text.strip():
+        basic_clean = re.sub(
+            r'^(?:Câu\s*hỏi\s*\d+[:\.\s\-]*|Câu\s*\d+[:\.\s\-]*|Question\s*\d+[:\.\s\-]*)',
+            '',
+            text,
+            flags=re.IGNORECASE
+        )
+        return basic_clean.strip()
+
+    return cleaned_text.strip()
+
+
+_LONE_BACKSLASH_RE = re.compile(r'(?<!\\)\\(?!(?:["\\/]|[ntrbf](?![a-zA-Z])|u[0-9a-fA-F]{4}))')
+
+
+def _sanitize_json_backslashes(text: str) -> str:
+    """Escape lone backslashes that are not valid JSON escape sequences.
+    
+    LLMs often emit LaTeX like \\frac inside JSON strings as a single backslash
+    (\\frac), which is an invalid JSON escape.  We double every backslash that
+    is NOT already part of a recognised JSON escape sequence so that json.loads
+    can parse the result.
+    """
+    return _LONE_BACKSLASH_RE.sub(r'\\\\', text)
 
 
 def _try_parse_json(raw: str) -> list:
     """Thử parse JSON từ response. Trả None nếu thất bại."""
     raw = raw.strip()
 
-    # Thử parse thẳng
-    try:
-        data = json.loads(raw)
+    def _loads(s: str):
+        """Try json.loads on the original string, then on the backslash-sanitized version."""
+        try:
+            return json.loads(s)
+        except Exception:
+            pass
+        try:
+            return json.loads(_sanitize_json_backslashes(s))
+        except Exception:
+            return None
+
+    # 1. Thử parse thẳng
+    data = _loads(raw)
+    if isinstance(data, list) and data:
+        return data
+
+    # 2. Tìm theo markdown codeblock ```json ... ```
+    md_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', raw, re.DOTALL)
+    if md_match:
+        data = _loads(md_match.group(1))
         if isinstance(data, list) and data:
             return data
-    except Exception:
-        pass
 
-    # Tìm JSON array trong text
-    for pattern in [
-        r'\[\s*\{.*?\}\s*\]',
-        r'```(?:json)?\s*(\[.*?\])\s*```',
-    ]:
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            try:
-                s = match.group(1) if match.lastindex else match.group()
-                data = json.loads(s)
-                if isinstance(data, list) and data:
-                    return data
-            except Exception:
-                pass
+    # 3. Quét ngược từ dấu ] cuối cùng (Bypass lỗi LaTeX '}' ngay trước ']')
+    start_idx = raw.find('[')
+    if start_idx != -1:
+        pos = raw.rfind(']')
+        while pos > start_idx:
+            candidate = raw[start_idx:pos+1]
+            data = _loads(candidate)
+            if isinstance(data, list) and data:
+                return data
+            pos = raw.rfind(']', start_idx, pos)
 
     return None
 
@@ -770,6 +987,7 @@ def _parse_numbered_fallback(raw: str, start_index: int) -> list:
                     question=q_text,
                     options=opts,
                     answer=answer,
+                    correct_option=answer,
                     explanation=expl,
                 ))
             i = j
@@ -779,7 +997,7 @@ def _parse_numbered_fallback(raw: str, start_index: int) -> list:
     return questions
 
 
-def _normalize_question(q: dict, idx: int) -> QuizQuestion:
+def _normalize_question(q: dict, idx: int, default_bloom: str = None) -> QuizQuestion:
     """Chuẩn hóa một câu hỏi từ dict về QuizQuestion."""
     options = q.get("options", {})
     if not isinstance(options, dict):
@@ -792,14 +1010,20 @@ def _normalize_question(q: dict, idx: int) -> QuizQuestion:
     if answer not in ["A", "B", "C", "D"]:
         answer = "A"
 
+    bloom = str(q.get("bloom_level", "")).strip().lower()
+    if bloom not in ["remember", "understand", "apply", "analyze"]:
+        bloom = default_bloom if default_bloom in ["remember", "understand", "apply", "analyze"] else "remember"
+
     return QuizQuestion(
         id=idx,
-        question=str(q.get("question", f"Câu hỏi {idx}")),
+        question=_clean_question_text(str(q.get("question", f"Câu hỏi {idx}"))),
         options=options,
         answer=answer,
+        correct_option=answer,
         explanation=str(q.get("explanation", "")),
         step_by_step_explanation=str(q.get("step_by_step_explanation", "")),
-        chunk_id=""
+        chunk_id="",
+        bloom_level=bloom
     )
 
 

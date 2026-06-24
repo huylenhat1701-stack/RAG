@@ -30,6 +30,7 @@ from ..services.document_service import (
     save_upload_file,
     process_and_index_document,
     get_document_content,
+    get_safe_file_path,
 )
 from ..services.rag_service import answer_question, summarize_document, generate_exercise, generate_quiz, generate_learning_path
 from ..models.schemas import (
@@ -217,7 +218,7 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
     # Xóa file vật lý
-    file_path = Path(doc.file_path)
+    file_path = get_safe_file_path(doc.file_path)
     if file_path.exists():
         file_path.unlink()
     # Xóa file extracted nếu có
@@ -246,7 +247,7 @@ def download_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
-    file_path = Path(doc.file_path)
+    file_path = get_safe_file_path(doc.file_path)
     if source == "original":
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="File gốc không tồn tại")
@@ -320,6 +321,7 @@ def create_quiz(
             db=db,
             llm_service=llm_service,
             session_id=str(current_user.id),
+            bloom_level=request.bloom_level,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -349,11 +351,48 @@ def submit_quiz_result(
             doc_id=doc_id,
             chunk_id=request.chunk_id,
             is_correct=1 if request.is_correct else 0,
-            db=db
+            db=db,
+            bloom_level=request.bloom_level
         )
         return QuizSubmitResponse(success=True, new_probability=new_prob)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi cập nhật BKT: {str(e)}")
+
+
+@router.get(
+    "/documents/{doc_id}/quiz/bloom-stats",
+    summary="Lấy thống kê kết quả học tập theo cấp độ Bloom",
+    tags=["Tài liệu"],
+)
+def get_bloom_stats(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Truy vấn kết quả làm bài trắc nghiệm từ QuizHistory để tính độ chính xác theo Bloom."""
+    from ..models.domain import QuizHistory
+    
+    # Lấy toàn bộ lịch sử làm quiz của user cho tài liệu này
+    history = db.query(QuizHistory).filter(
+        QuizHistory.session_id == str(current_user.id),
+        QuizHistory.doc_id == doc_id
+    ).all()
+    
+    bloom_levels = ["remember", "understand", "apply", "analyze"]
+    stats = {}
+    
+    for level in bloom_levels:
+        level_records = [h for h in history if h.bloom_level == level]
+        total = len(level_records)
+        correct = sum(1 for h in level_records if h.is_correct == 1)
+        accuracy = round(correct / total, 2) if total > 0 else 0.0
+        stats[level] = {
+            "correct": correct,
+            "total": total,
+            "accuracy": accuracy
+        }
+        
+    return stats
 
 @router.post(
     "/documents/{doc_id}/learning-path",
@@ -388,6 +427,115 @@ def create_learning_path(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi tạo lộ trình: {str(e)}")
+
+
+@router.get(
+    "/documents/{doc_id}/report/preview",
+    summary="Xem trước dữ liệu báo cáo học tập",
+    tags=["Tài liệu"],
+)
+def get_report_preview(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy dữ liệu tổng hợp báo cáo học tập ở dạng JSON."""
+    from ..services.report_service import ReportService
+    # Kiểm tra quyền truy cập tài liệu
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+        
+    try:
+        data = ReportService.get_report_data(
+            doc_id=doc_id,
+            user_id=current_user.id,
+            db=db,
+            llm_service=llm_service
+        )
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo preview báo cáo: {str(e)}")
+
+
+@router.get(
+    "/documents/{doc_id}/report/download",
+    summary="Tải về báo cáo học tập dạng PDF",
+    tags=["Tài liệu"],
+)
+def download_report_pdf(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Sinh và tải về file PDF báo cáo học tập."""
+    from ..services.report_service import ReportService
+    from fastapi.responses import Response
+    
+    # Kiểm tra quyền truy cập tài liệu
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+        
+    try:
+        # 1. Tổng hợp dữ liệu
+        data = ReportService.get_report_data(
+            doc_id=doc_id,
+            user_id=current_user.id,
+            db=db,
+            llm_service=llm_service
+        )
+        # 2. Sinh PDF
+        pdf_bytes = ReportService.generate_pdf(data)
+        
+        import urllib.parse
+        encoded_filename = urllib.parse.quote(f"learning_report_{doc.file_name}.pdf")
+        
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers=headers
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi xuất báo cáo PDF: {str(e)}")
+
+
+@router.get(
+    "/documents/{doc_id}/knowledge-graph",
+    summary="Lấy dữ liệu bản đồ tri thức",
+    tags=["Tài liệu"],
+)
+def get_knowledge_graph(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+    current_user: User = Depends(get_current_user),
+):
+    """Xây dựng và lấy dữ liệu nodes/edges cho bản đồ tri thức."""
+    from ..services.graph_service import GraphService
+    # Kiểm tra quyền truy cập tài liệu
+    doc_repo = DocumentRepository(db)
+    doc = doc_repo.get_by_id(doc_id, user_id=current_user.id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+        
+    try:
+        data = GraphService.build_graph(
+            doc_id=doc_id,
+            user_id=current_user.id,
+            db=db,
+            llm_service=llm_service
+        )
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo bản đồ tri thức: {str(e)}")
 
 # ============================================================
 # CHAT / Q&A ENDPOINTS

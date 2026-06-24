@@ -7,9 +7,33 @@ import shutil
 from pathlib import Path
 from typing import Tuple, Optional
 
-from ..core.config import UPLOAD_DIR
+from ..core.config import UPLOAD_DIR, BASE_DIR
 from ..repositories.document_repo import DocumentRepository
 from ..services.llm_service import LLMService
+
+def get_safe_file_path(db_path: str) -> Path:
+    """
+    Giải quyết đường dẫn file tài liệu an toàn.
+    Kiểm tra nếu đường dẫn lưu trong DB là tuyệt đối và tồn tại,
+    ngược lại giải quyết tương đối theo BASE_DIR hoặc UPLOAD_DIR.
+    """
+    path = Path(db_path)
+    if path.is_absolute() and path.exists():
+        return path
+    
+    # Thử tương đối với BASE_DIR (nếu path dạng 'uploads/filename')
+    resolved_path = BASE_DIR / path
+    if resolved_path.exists():
+        return resolved_path
+        
+    # Thử trực tiếp trong UPLOAD_DIR (chỉ lấy filename)
+    resolved_path = UPLOAD_DIR / path.name
+    if resolved_path.exists():
+        return resolved_path
+        
+    # Fallback về UPLOAD_DIR/filename
+    return UPLOAD_DIR / path.name
+
 
 
 def _extract_text_from_pdf(file_path: Path) -> Tuple[str, int]:
@@ -111,7 +135,7 @@ def get_document_content(doc_id: int, doc_repo: DocumentRepository) -> Optional[
     if not doc:
         return None
 
-    file_path = Path(doc.file_path)
+    file_path = get_safe_file_path(doc.file_path)
     file_type = doc.file_type or ""
 
     # Ưu tiên file extracted.txt nếu có
@@ -241,7 +265,7 @@ def reload_indexed_documents(doc_repo: DocumentRepository, llm_service: LLMServi
 
     file_paths = []
     for doc in indexed_docs:
-        p = Path(doc.file_path)
+        p = get_safe_file_path(doc.file_path)
 
         # Ưu tiên 1: file .extracted.txt (LocalRAG đọc được tốt nhất)
         txt_p = p.with_suffix(".extracted.txt")
