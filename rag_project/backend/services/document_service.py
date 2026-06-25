@@ -236,7 +236,7 @@ def process_and_index_document(
             path_to_load = file_path
 
         # Bước 4 & 5: Load vào LocalRAG và Index
-        chunk_count = llm_service.load_files_into_kb([str(path_to_load)])
+        chunk_count = llm_service.load_files_into_kb([str(path_to_load)], original_filenames=[file_path.name])
 
         # Bước 6: Cập nhật DB
         doc_repo.update_status(doc_id, "INDEXED", chunk_count=chunk_count)

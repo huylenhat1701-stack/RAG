@@ -327,12 +327,12 @@ class LLMService:
     # Knowledge Base Management
     # ------------------------------------------------------------------
 
-    def load_files_into_kb(self, file_paths: List[str]) -> int:
+    def load_files_into_kb(self, file_paths: List[str], original_filenames: Optional[List[str]] = None) -> int:
         """Nạp các file vào ChromaDB (tích lũy, không xóa cũ)."""
         if not self._embedding_model:
             raise RuntimeError("Embedding model chua duoc khoi tao.")
 
-        for fp in file_paths:
+        for idx, fp in enumerate(file_paths):
             path = Path(fp)
             if not path.exists():
                 continue
@@ -345,7 +345,18 @@ class LLMService:
             except UnicodeDecodeError:
                 content = path.read_text(encoding="latin-1")
 
-            chunks = self._chunk_text(content, path.name)
+            # Determine the filename to store in metadata
+            if original_filenames and idx < len(original_filenames):
+                store_filename = original_filenames[idx]
+                stem = Path(store_filename).stem
+            else:
+                store_filename = path.name
+                if store_filename.lower().endswith(".extracted.txt"):
+                    stem = store_filename[:-14]
+                else:
+                    stem = path.stem
+
+            chunks = self._chunk_text(content, store_filename)
             if not chunks:
                 continue
 
@@ -363,7 +374,6 @@ class LLMService:
 
             # Thêm cả filename và file_stem vào metadata — file_stem dùng cho
             # ChromaDB filter chính xác mà không cần load toàn bộ collection
-            stem = path.stem  # Ví dụ: 'BT Giai tich 2' từ 'BT Giai tich 2.extracted.txt'
             self._collection.add(
                 ids=[c.id for c in chunks],
                 embeddings=embeddings,
@@ -373,7 +383,7 @@ class LLMService:
                     "file_stem": stem,
                 } for c in chunks],
             )
-            print(f"[OK] Indexed {len(chunks)} chunks from {path.name} (stem={stem!r})")
+            print(f"[OK] Indexed {len(chunks)} chunks from {store_filename} (stem={stem!r})")
 
         # Invalidate search cache — document mới ảnh hưởng đến kết quả vector search
         self.invalidate_search_cache()

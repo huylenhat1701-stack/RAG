@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
-import { PaperPlaneRight, Trash, Plus } from "@phosphor-icons/react";
+import { PaperPlaneRight, Trash, Plus, FileText } from "@phosphor-icons/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [topK, setTopK] = useState(15);
   const [documents, setDocuments] = useState<any[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<number[]>([]);
+  const [showDocFilter, setShowDocFilter] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const leftPinRef = useRef<HTMLDivElement>(null);
@@ -220,63 +221,6 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
-
-            {/* Filter by Documents with Double Bezel */}
-            <div className="double-bezel-outer max-w-sm mt-6">
-              <div className="double-bezel-inner p-5 flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted">Lọc nguồn tài liệu</label>
-                  {selectedDocs.length > 0 && (
-                    <button 
-                      onClick={() => setSelectedDocs([])} 
-                      className="text-[10px] font-bold text-accent-color hover:underline cursor-pointer"
-                    >
-                      Bỏ lọc ({selectedDocs.length})
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-muted leading-normal">Chọn các tài liệu cụ thể bạn muốn AI đọc để trả lời. Nếu không chọn, AI sẽ tìm trên toàn bộ cơ sở tri thức.</p>
-                
-                {documents.length === 0 ? (
-                  <p className="text-xs text-muted italic">Không tìm thấy tài liệu nào trong thư viện.</p>
-                ) : (
-                  <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
-                    {documents.map((doc) => {
-                      const isChecked = selectedDocs.includes(Number(doc.id));
-                      return (
-                        <button
-                          key={doc.id}
-                          onClick={() => {
-                            const docIdNum = Number(doc.id);
-                            if (isChecked) {
-                              setSelectedDocs(prev => prev.filter(id => id !== docIdNum));
-                            } else {
-                              setSelectedDocs(prev => [...prev, docIdNum]);
-                            }
-                          }}
-                          className={`flex items-center gap-3 text-left w-full p-2.5 rounded-xl border text-xs font-semibold transition-premium-fast hover:scale-[1.01] cursor-pointer
-                            ${isChecked 
-                              ? 'bg-accent-color/10 border-accent-color/30 text-foreground' 
-                              : 'bg-foreground/5 border-border hover:border-foreground/10 text-muted hover:text-foreground'
-                            }
-                          `}
-                        >
-                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-premium-fast
-                            ${isChecked 
-                              ? 'bg-accent-color border-accent-color' 
-                              : 'border-muted'
-                            }
-                          `}>
-                            {isChecked && <div className="w-1.5 h-1.5 bg-background rounded-full"></div>}
-                          </div>
-                          <span className="truncate flex-1">{doc.file_name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -339,8 +283,94 @@ export default function ChatPage() {
       </div>
 
       {/* Pinned Input Area at bottom */}
-      <div className="fixed bottom-24 left-0 lg:left-[33.33%] w-full lg:w-[66.67%] p-4 lg:p-8 bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none z-40 transition-all duration-300">
-        <div className="max-w-3xl mx-auto pointer-events-auto">
+      <div className="fixed bottom-28 lg:bottom-32 left-0 lg:left-[33.33%] w-full lg:w-[66.67%] p-4 lg:p-8 bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none z-40 transition-all duration-300">
+        <div className="max-w-3xl mx-auto pointer-events-auto relative">
+          
+          {/* Collapsible Document Filter Dropdown floating above input */}
+          {showDocFilter && (
+            <div className="absolute bottom-full mb-3 left-4 w-[calc(100%-2rem)] max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-5 z-50 animate-fade-in pointer-events-auto backdrop-blur-md">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted">Lọc nguồn tài liệu</span>
+                {selectedDocs.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedDocs([])} 
+                    className="text-[10px] font-bold text-accent-color hover:underline cursor-pointer"
+                  >
+                    Bỏ lọc ({selectedDocs.length})
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted mb-3 leading-normal">
+                AI sẽ chỉ tìm kiếm và trả lời dựa trên các tài liệu được chọn dưới đây.
+              </p>
+              
+              {documents.length === 0 ? (
+                <p className="text-xs text-muted italic">Không tìm thấy tài liệu nào trong thư viện.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto pr-1">
+                  {documents.map((doc) => {
+                    const isChecked = selectedDocs.includes(Number(doc.id));
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => {
+                          const docIdNum = Number(doc.id);
+                          if (isChecked) {
+                            setSelectedDocs(prev => prev.filter(id => id !== docIdNum));
+                          } else {
+                            setSelectedDocs(prev => [...prev, docIdNum]);
+                          }
+                        }}
+                        className={`flex items-center gap-2.5 text-left w-full p-2.5 rounded-xl border text-xs font-semibold transition-premium-fast hover:scale-[1.01] cursor-pointer
+                          ${isChecked 
+                            ? 'bg-accent-color/10 border-accent-color/30 text-foreground animate-pulse-subtle' 
+                            : 'bg-foreground/5 border-border hover:border-foreground/10 text-muted hover:text-foreground'
+                          }
+                        `}
+                      >
+                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-premium-fast
+                          ${isChecked 
+                            ? 'bg-accent-color border-accent-color' 
+                            : 'border-muted'
+                          }
+                        `}>
+                          {isChecked && <div className="w-1.5 h-1.5 bg-background rounded-full"></div>}
+                        </div>
+                        <span className="truncate flex-1">{doc.file_name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick controls row above input */}
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setShowDocFilter(!showDocFilter)}
+              className={`flex items-center gap-1.5 px-4 py-1.5 bg-card hover:bg-card border border-border text-foreground font-semibold rounded-full shadow-sm transition-premium cursor-pointer text-xs
+                ${selectedDocs.length > 0 ? 'border-accent-color/30 text-accent-color bg-accent-color/5' : ''}
+              `}
+            >
+              <FileText weight={selectedDocs.length > 0 ? "fill" : "light"} className={`w-4 h-4 ${selectedDocs.length > 0 ? 'text-accent-color' : 'text-muted'}`} />
+              <span>Nguồn tài liệu: {selectedDocs.length > 0 ? `${selectedDocs.length} tài liệu đã chọn` : "Tất cả"}</span>
+            </button>
+            
+            {selectedDocs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedDocs([])}
+                className="flex items-center gap-1 px-3.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-semibold rounded-full border border-red-500/20 transition-premium cursor-pointer text-xs"
+              >
+                Bỏ lọc
+              </button>
+            )}
+          </div>
+
           <form onSubmit={handleAsk} className="relative flex items-center">
             <input 
               type="text" 

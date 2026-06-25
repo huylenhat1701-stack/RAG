@@ -227,7 +227,7 @@ export default function DocumentDetailPage() {
                 >
                   <MagicWand weight="light" className="w-4 h-4" /> Tóm tắt AI
                 </button>
-                <button 
+                {/* <button 
                   onClick={() => setActiveTab("quiz")}
                   className={`px-5 py-2 rounded-full text-xs font-bold transition-premium flex items-center gap-2 whitespace-nowrap hover:scale-105 active:scale-[0.98] ${
                     activeTab === "quiz" 
@@ -236,7 +236,7 @@ export default function DocumentDetailPage() {
                   }`}
                 >
                   <Trophy weight="light" className="w-4 h-4" /> Trắc nghiệm BKT
-                </button>
+                </button> */}
               </div>
             </div>
           </div>
