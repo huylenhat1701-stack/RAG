@@ -24,6 +24,45 @@ from ..core.config import (
 )
 
 
+def split_into_sentences(text: str) -> List[str]:
+    """
+    Tách câu thông minh tránh ngắt câu tại chữ số thập phân (ví dụ: 3.14) 
+    hoặc viết tắt học thuật/danh xưng tiếng Anh & tiếng Việt (ví dụ: TS., GS., ThS., PGS., Dr., Mr., vs.)
+    và các chữ cái viết tắt tên riêng (ví dụ: N.V. An).
+    """
+    if not text:
+        return []
+        
+    temp_text = text
+    
+    # 1. Bảo vệ các số thập phân (e.g. 3.14, 1.5)
+    temp_text = re.sub(r'(\d+)\.(\d+)', r'\1_DECIMAL_DOT_\2', temp_text)
+    
+    # 2. Bảo vệ các chữ cái viết tắt tên riêng đơn lẻ (e.g. N.V. An -> N_ABBR_DOT_V_ABBR_DOT_ An)
+    temp_text = re.sub(r'\b([a-zA-Z])\.', r'\1_ABBR_DOT_', temp_text)
+    
+    # 3. Bảo vệ các chữ viết tắt thông dụng kết thúc bằng dấu chấm
+    abbrs = ["gs", "ts", "pgs", "ths", "tp", "dr", "mr", "mrs", "ms", "vs", "vol", "no", "prof", "tphcm", "co"]
+    for abbr in abbrs:
+        pattern = r'\b(' + abbr + r')\.'
+        temp_text = re.sub(pattern, r'\1_ABBR_DOT_', temp_text, flags=re.IGNORECASE)
+        
+    # 4. Tách câu theo các dấu ngắt câu . ? ! theo sau bởi khoảng trắng (giữ lại dấu ngắt câu)
+    raw_sentences = re.split(r'(?<=[.?!])\s+', temp_text)
+    
+    sentences = []
+    for s in raw_sentences:
+        s = s.strip()
+        if not s:
+            continue
+        # Khôi phục các dấu chấm đã bảo vệ
+        s = s.replace('_DECIMAL_DOT_', '.')
+        s = s.replace('_ABBR_DOT_', '.')
+        sentences.append(s)
+        
+    return sentences
+
+
 def answer_question(
     question: str,
     top_k: int,
@@ -105,10 +144,11 @@ def answer_question(
                     f"{content}"
                 )
 
-    # Quyết định chế độ dựa trên tổng độ dài nội dung-co che kep Full-context&RAG(hoi dap)
+    # Quyết định chế độ dựa trên tổng độ dài nội dung và giới hạn thực tế của LLM (tránh silent truncation)
+    max_safe_chars = min(FULL_CONTEXT_THRESHOLD_CHARS, llm_service._max_content_chars)
     use_full_context = (
         combined_content
-        and len(combined_content) <= FULL_CONTEXT_THRESHOLD_CHARS
+        and len(combined_content) <= max_safe_chars
     )
 
     # ----------------------------------------------------------------
@@ -216,8 +256,8 @@ def answer_question(
             # ------------------------------------------------------------
             warning = None
             if hasattr(llm_service, "verify_claims"):
-                # Lấy các câu trong answer làm claims (đơn giản hóa bằng split '.')
-                claims = [c.strip() for c in answer.split('.') if len(c.strip()) > 10]
+                # Lấy các câu trong answer làm claims dùng bộ chia câu thông minh
+                claims = [c.strip() for c in split_into_sentences(answer) if len(c.strip()) > 10]
                 if claims:
                     # Gộp toàn bộ context thành 1 chuỗi để verify
                     context_text = " ".join([r.chunk.text for r in context_chunks])

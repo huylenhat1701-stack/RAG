@@ -117,7 +117,10 @@ class LLMService:
 
         # Init ChromaDB (bền vững, lưu trên đĩa)
         self._chroma_client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
-        self._collection = self._chroma_client.get_or_create_collection(name=self._kb_name)
+        self._collection = self._chroma_client.get_or_create_collection(
+            name=self._kb_name,
+            metadata={"hnsw:space": "cosine"}
+        )
 
         # Init Embedding Model (offline, dùng model local đã tải)
         try:
@@ -469,7 +472,9 @@ class LLMService:
         search_results = []
         if results["documents"] and results["documents"][0]:
             for i in range(len(results["documents"][0])):
-                score = 1.0 / (1.0 + results["distances"][0][i])
+                # ChromaDB cosine distance d = 1 - cos(theta)
+                # Cosine similarity = 1.0 - d
+                score = max(0.0, 1.0 - results["distances"][0][i])
                 chunk = ChunkDocument(
                     id=results["ids"][0][i],
                     text=results["documents"][0][i],

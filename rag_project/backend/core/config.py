@@ -71,7 +71,7 @@ TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "15"))  # Lấy nhiều chun
 
 # ============================================================
 # Relevance Thresholds cho RAG Q&A
-# Score = 1.0 / (1.0 + L2_distance), dao động 0–1 (cao = liên quan hơn)
+# Score = max(0.0, 1.0 - Cosine_distance), dao động 0–1 (cao = tương đồng hơn)
 # Cần đo thực nghiệm để hiệu chỉnh chính xác, giá trị dưới là tạm thời.
 # ============================================================
 # Lọc chunks có score thấp hơn ngưỡng này trước khi đưa vào context LLM
