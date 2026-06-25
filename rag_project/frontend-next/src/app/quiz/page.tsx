@@ -16,7 +16,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import { preprocessLaTeX, markdownComponents } from "@/lib/latex";
+import { preprocessLaTeX, markdownComponents, quizMarkdownComponents } from "@/lib/latex";
 import Link from "next/link";
 
 interface QuizQuestion {
@@ -190,7 +190,7 @@ export default function QuizPage() {
   const activeBloomBg = activeQuestion ? (bloomConfig[activeQuestion.bloom_level]?.bg || "bg-emerald-500/10") : "bg-emerald-500/10";
 
   return (
-    <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-8 md:py-16 pb-32">
+    <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-8 md:py-16 pb-56">
       {/* BACKGROUND DECORATIONS */}
       <div className="mesh-glow-violet top-10 left-10" />
       <div className="mesh-glow-emerald bottom-20 right-10" />
@@ -386,11 +386,11 @@ export default function QuizPage() {
                       <span className="font-bold border border-current/25 rounded-md px-1.5 text-xs mt-0.5">
                         {key}
                       </span>
-                      <div className="flex-1 text-sm md:text-base leading-relaxed">
+                      <div className="flex-1 text-sm md:text-base leading-relaxed font-normal">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           rehypePlugins={[rehypeRaw]}
-                          components={markdownComponents}
+                          components={quizMarkdownComponents}
                         >
                           {preprocessLaTeX(optionText)}
                         </ReactMarkdown>
@@ -445,7 +445,15 @@ export default function QuizPage() {
             <div className="bg-card/45 border border-border rounded-3xl p-6 space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-emerald-500 uppercase tracking-wider mb-1">Giải thích đáp án</h3>
-                <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{activeQuestion.explanation}</p>
+                <div className="prose prose-sm prose-zinc dark:prose-invert max-w-none text-muted leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={markdownComponents}
+                  >
+                    {preprocessLaTeX(activeQuestion.explanation || "")}
+                  </ReactMarkdown>
+                </div>
               </div>
               {activeQuestion.step_by_step_explanation && (
                 <div className="border-t border-border pt-4">

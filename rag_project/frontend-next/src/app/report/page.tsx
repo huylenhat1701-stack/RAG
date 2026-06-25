@@ -16,7 +16,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import { preprocessLaTeX, markdownComponents } from "@/lib/latex";
+import { preprocessLaTeX, markdownComponents, quizMarkdownComponents } from "@/lib/latex";
 
 interface StrengthOrWeakness {
   id: string;
@@ -126,7 +126,7 @@ export default function ReportPage() {
   const selectedDoc = documents.find(d => d.id === Number(selectedDocId));
 
   return (
-    <div className="flex-1 w-full max-w-6xl mx-auto px-4 py-8 md:py-16 pb-32">
+    <div className="flex-1 w-full max-w-6xl mx-auto px-4 py-8 md:py-16 pb-56">
       {/* BACKGROUND DECOR DECORATIONS */}
       <div className="mesh-glow-violet top-20 right-10" />
       <div className="mesh-glow-emerald bottom-10 left-5" />
@@ -238,7 +238,15 @@ export default function ReportPage() {
 
                 <div className="border-t border-border pt-4">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Tóm tắt tài liệu AI (Summary)</h4>
-                  <p className="text-sm text-muted leading-relaxed whitespace-pre-wrap">{reportData.overall_summary}</p>
+                  <div className="prose prose-sm prose-zinc dark:prose-invert max-w-none text-muted leading-relaxed">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={markdownComponents}
+                    >
+                      {preprocessLaTeX(reportData.overall_summary)}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
 
@@ -369,14 +377,23 @@ export default function ReportPage() {
                           {Object.keys(q.options).map((optKey) => (
                             <div key={optKey} className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-xl">
                               <span className="font-bold border border-border rounded px-1 text-[10px]">{optKey}</span>
-                              <span className="truncate"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={markdownComponents}>{preprocessLaTeX(q.options[optKey])}</ReactMarkdown></span>
+                              <span className="truncate">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={quizMarkdownComponents}>
+                                  {preprocessLaTeX(q.options[optKey])}
+                                </ReactMarkdown>
+                              </span>
                             </div>
                           ))}
                         </div>
                         {/* Answer explanation */}
                         <div className="text-xs text-emerald-500 bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 leading-relaxed">
                           <span className="font-bold">Đáp án đúng: {q.answer}</span>
-                          <span className="block mt-1 text-muted">Giải thích: {q.explanation}</span>
+                          <span className="block mt-1 text-muted">
+                            Giải thích:{" "}
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={quizMarkdownComponents}>
+                              {preprocessLaTeX(q.explanation)}
+                            </ReactMarkdown>
+                          </span>
                         </div>
                       </div>
                     ))}

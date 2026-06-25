@@ -47,7 +47,7 @@ export default function Navigation() {
     { name: "Đánh giá", href: "/evaluation", icon: ChartBar },
     { name: "Quiz", href: "/quiz", icon: Brain },
     { name: "Báo cáo", href: "/report", icon: Certificate },
-    { name: "Bản đồ", href: "/knowledge-graph", icon: Graph },
+    // { name: "Bản đồ", href: "/knowledge-graph", icon: Graph },
   ];
 
   if (!mounted || pathname === "/login") return null;
@@ -59,8 +59,8 @@ export default function Navigation() {
   };
 
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-      <nav className="flex items-center gap-1.5 p-2 rounded-full bg-card/75 backdrop-blur-xl border border-border shadow-2xl transition-premium">
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 max-w-[95vw]">
+      <nav className="flex flex-row flex-nowrap items-center gap-1 p-1.5 sm:gap-1.5 sm:p-2 rounded-full bg-card/75 backdrop-blur-xl border border-border shadow-2xl transition-premium overflow-x-auto no-scrollbar">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -77,7 +77,7 @@ export default function Navigation() {
               `}
             >
               <Icon weight={isActive ? "fill" : "light"} className="w-5 h-5" />
-              <span className="text-sm font-medium hidden md:block">{item.name}</span>
+              <span className="text-sm font-medium hidden lg:block whitespace-nowrap">{item.name}</span>
             </Link>
           );
         })}
@@ -101,7 +101,7 @@ export default function Navigation() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-full transition-premium-fast text-red-500 hover:text-red-400 hover:bg-red-500/10 hover:scale-105 active:scale-[0.98]"
         >
           <SignOut weight="light" className="w-5 h-5" />
-          <span className="text-sm font-medium hidden md:block">Đăng xuất</span>
+          <span className="text-sm font-medium hidden lg:block whitespace-nowrap">Đăng xuất</span>
         </button>
       </nav>
     </div>
