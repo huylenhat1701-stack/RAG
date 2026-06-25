@@ -192,7 +192,7 @@ export default function ReportPage() {
                 )}
               </button>
 
-              <button
+              {/* <button
                 onClick={handleDownloadPdf}
                 disabled={pdfLoading || !reportData}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-full transition-premium-fast hover:scale-[1.02] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none shadow-lg"
@@ -204,7 +204,7 @@ export default function ReportPage() {
                     <FilePdf className="w-5 h-5" /> Xuất báo cáo PDF
                   </>
                 )}
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
